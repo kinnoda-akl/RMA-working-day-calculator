@@ -42,17 +42,22 @@ To run this project locally:
 
 1. **Clone the repository**:
 
-   ```bash
-   git clone https://github.com/kinnoda-akl/RMA-working-day-calculator.git
+```
+git clone https://github.com/kinnoda-akl/RMA-working-day-calculator.git
+```
 
 2. **Install dependencies**:
 
+```
 cd RMA-working-day-calculator
 npm install
+```
 
 3. **Start the development server**:
 
+```
 npm run dev
+```
 
 ## License
 
@@ -68,4 +73,4 @@ Developed by CoLab Planning Limited to assist with resource consent processing. 
 
 ## Acknowledgments
 
-This tool was developed in response to the need for accurate statutory timeframe tracking in resource consent processing. It incorporates feedback from planning professionals and follows best practices established by the [Ministry for the Environment]([url](https://environment.govt.nz/)).
+This tool was developed in response to the need for accurate statutory timeframe tracking in resource consent processing. It incorporates feedback from planning professionals and follows best practices established by the [Ministry for the Environment](https://environment.govt.nz/)
