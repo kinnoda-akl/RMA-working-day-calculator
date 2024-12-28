@@ -19,13 +19,42 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 
-// Detect if the user’s primary pointer is coarse (i.e. touch device).
+// Detect if the user’s primary pointer is coarse (i.e. a touch device).
 const isTouchDevice =
   typeof window !== 'undefined' &&
   window.matchMedia &&
   window.matchMedia('(pointer: coarse)').matches;
 
-// Types for your state
+/**
+ * A simple full-screen modal-based tooltip for mobile.
+ * Shows content in a dismissible panel at bottom.
+ */
+const MobileTooltip: React.FC<{
+  content: string;
+  isOpen: boolean;
+  onClose: () => void;
+}> = ({ content, isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg p-4 max-w-sm w-full shadow-lg"
+        onClick={e => e.stopPropagation()}
+      >
+        <p className="text-sm mb-4">{content}</p>
+        <Button onClick={onClose} className="w-full bg-[#3c5c17] hover:bg-[#2e4512] text-white">
+          Close
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// Types for state
 interface HoldPeriod {
   id: string;
   type: string;
@@ -33,7 +62,7 @@ interface HoldPeriod {
   end: string;
 }
 
-// Store days as a string so the user can backspace the initial "0"
+// Store days as a string so the user can backspace any initial "0".
 interface Extension {
   id: string;
   days: string;
@@ -70,7 +99,6 @@ interface DateInterval {
   end: Date;
 }
 
-// Define hold period types
 const HOLD_PERIOD_TYPES = {
   's88E': 'Written Approvals s88E',
   's88H': 'Awaiting Deposit s88H',
@@ -81,7 +109,6 @@ const HOLD_PERIOD_TYPES = {
   'other': 'Other'
 } as const;
 
-// Define the consent types
 const CONSENT_TYPES = {
   standard: {
     label: 'Standard (Non-Notified) — 20 days',
@@ -112,7 +139,9 @@ const ConsentCalculator: React.FC = () => {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [applicationType, setApplicationType] = useState<keyof typeof CONSENT_TYPES>('standard');
 
-  // Load CSV data for public holidays / excluded days
+  // NEW: track which tooltip is currently open (for mobile).
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
   useEffect(() => {
     const loadNonWorkingDays = async () => {
       try {
@@ -125,8 +154,7 @@ const ConsentCalculator: React.FC = () => {
               .flat()
               .filter(Boolean)
               .map((dateStr: string) => {
-                const parsedDate = parse(dateStr, 'd/MM/yyyy', new Date());
-                return parsedDate;
+                return parse(dateStr, 'd/MM/yyyy', new Date());
               })
               .filter((date: Date) => !isNaN(date.getTime()));
 
@@ -143,7 +171,6 @@ const ConsentCalculator: React.FC = () => {
     loadNonWorkingDays();
   }, []);
 
-  // Check if date is a working day
   const isWorkingDay = (date: Date): boolean => {
     if (isWeekend(date)) return false;
     return !nonWorkingDays.some(holiday =>
@@ -154,7 +181,6 @@ const ConsentCalculator: React.FC = () => {
     );
   };
 
-  // Calculate working days between two dates
   const calculateWorkingDays = (start: Date, end: Date): WorkingDaysResult => {
     let workingDays = 0;
     let weekends = 0;
@@ -175,7 +201,6 @@ const ConsentCalculator: React.FC = () => {
     return { workingDays, weekends, holidays };
   };
 
-  // Merge overlapping intervals
   const mergeIntervals = (intervals: DateInterval[]): DateInterval[] => {
     if (!intervals.length) return [];
     intervals.sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -193,11 +218,9 @@ const ConsentCalculator: React.FC = () => {
       }
     }
     merged.push(current);
-
     return merged;
   };
 
-  // Clamp hold intervals within main date range
   const clampIntervalToRange = (
     holdStart: Date,
     holdEnd: Date,
@@ -215,7 +238,6 @@ const ConsentCalculator: React.FC = () => {
     return { start: clampedStart, end: clampedEnd };
   };
 
-  // Add new hold period
   const addHoldPeriod = () => {
     const newHoldPeriod: HoldPeriod = {
       id: crypto.randomUUID(),
@@ -226,12 +248,10 @@ const ConsentCalculator: React.FC = () => {
     setHoldPeriods([...holdPeriods, newHoldPeriod]);
   };
 
-  // Remove hold period
   const removeHoldPeriod = (id: string) => {
     setHoldPeriods(holdPeriods.filter(period => period.id !== id));
   };
 
-  // Add new extension (s37)
   const addExtension = () => {
     const newExtension: Extension = {
       id: crypto.randomUUID(),
@@ -240,12 +260,10 @@ const ConsentCalculator: React.FC = () => {
     setExtensions([...extensions, newExtension]);
   };
 
-  // Remove extension
   const removeExtension = (id: string) => {
     setExtensions(extensions.filter(ext => ext.id !== id));
   };
 
-  // Trigger calculation
   const calculateResult = () => {
     setValidationError(null);
 
@@ -268,10 +286,8 @@ const ConsentCalculator: React.FC = () => {
       return;
     }
 
-    // 1) total working days in main period
     const { workingDays: totalDays, weekends, holidays } = calculateWorkingDays(mainStart, mainEnd);
 
-    // 2) clamp hold intervals
     const holdIntervals = holdPeriods
       .filter(p => p.start && p.end)
       .map(p => ({
@@ -291,7 +307,6 @@ const ConsentCalculator: React.FC = () => {
       })
       .filter(obj => obj.interval !== null) as Array<{ type: string; interval: DateInterval }>;
 
-    // 3) build holdPeriodDetails
     const holdPeriodDetails = holdIntervals.map(obj => {
       const { workingDays } = calculateWorkingDays(obj.interval.start, obj.interval.end);
       return {
@@ -302,26 +317,20 @@ const ConsentCalculator: React.FC = () => {
       };
     });
 
-    // 4) merge intervals to avoid double count
     const merged = mergeIntervals(holdIntervals.map(h => h.interval));
-    // 5) sum holdDays
     let holdDays = 0;
     merged.forEach(({ start, end }) => {
       const { workingDays } = calculateWorkingDays(start, end);
       holdDays += workingDays;
     });
 
-    // 6) parse extensionDays
     const extensionDays = extensions.reduce((sum, ext) => {
       const parsed = parseInt(ext.days, 10);
       return sum + (isNaN(parsed) ? 0 : parsed);
     }, 0);
 
-    // 7) baseDays
     const baseDays = CONSENT_TYPES[applicationType].baseDays;
     const maxDays = baseDays + extensionDays;
-
-    // 8) finalDays
     const finalDays = totalDays - holdDays;
 
     setResult({
@@ -339,17 +348,12 @@ const ConsentCalculator: React.FC = () => {
     });
   };
 
-  // If on touch device, handle tooltip triggers differently (click instead of hover).
-  const tooltipTriggerProps = isTouchDevice
-    ? { onClick: (e: React.MouseEvent) => e.preventDefault() }
-    : {};
-
-  return (
+   return (
     <Card className="w-full max-w-2xl mx-auto shadow-lg border-0 min-w-[320px] overflow-hidden bg-white sm:rounded-lg">
       <CardHeader className="bg-gradient-to-r from-[#3c5c17] to-[#6ba32a] text-white pb-6">
         <CardTitle className="text-2xl font-bold">RMA Timeframes Calculator</CardTitle>
         <p className="text-sm opacity-80 mt-1">
-          A tool for calculating processing timeframes for resource consent applications. Brought to you by CoLab Planning.
+          A tool for calculating processing timeframes for resource consent applications under the Resource Management Act 1991. Brought to you by CoLab Planning.
         </p>
       </CardHeader>
 
@@ -651,19 +655,35 @@ const ConsentCalculator: React.FC = () => {
                   <div className="mb-2 sm:mb-0">
                     <div className="flex items-center gap-1 text-gray-700 font-medium">
                       Working Days
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger {...(isTouchDevice ? { onClick: (e: React.MouseEvent) => e.preventDefault() } : {})}>
-                            <Info className="h-4 w-4 text-gray-400" />
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            <p className="text-sm font-normal">
-                              Working days as defined in s2 of the RMA – excludes weekends,
-                              public holidays, and the period between 20 December and 10 January
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      {isTouchDevice ? (
+                        <>
+                          <button
+                            onClick={() => setActiveTooltip('working-days')}
+                            className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                          >
+                            <Info className="h-4 w-4" />
+                          </button>
+                          <MobileTooltip
+                            content="Working days as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January"
+                            isOpen={activeTooltip === 'working-days'}
+                            onClose={() => setActiveTooltip(null)}
+                          />
+                        </>
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Info className="h-4 w-4 text-gray-400" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p className="text-sm font-normal">
+                                Working days as defined in s2 of the RMA – excludes weekends,
+                                public holidays, and the period between 20 December and 10 January
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                   </div>
                   <div className="text-2xl sm:text-3xl font-bold text-gray-900">
@@ -681,31 +701,49 @@ const ConsentCalculator: React.FC = () => {
                         <span className="text-red-800 font-medium">
                           Over time limit by {result.finalDays - result.maxDays} working days
                         </span>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger {...(isTouchDevice ? { onClick: (e: React.MouseEvent) => e.preventDefault() } : {})}>
-                              <Info className="h-4 w-4 text-gray-400" />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs p-4">
-                              <div className="space-y-2">
-                                <p>A discount on administrative charges applies when a resource
-                                   consent or s127 application is processed outside statutory
-                                   timeframes.</p>
-                                <p className="text-sm text-gray-400">
-                                  Learn more about the{' '}
-                                  <a
-                                    href="https://environment.govt.nz/acts-and-regulations/regulations/discount-on-administrative-charges/"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-500 hover:underline"
-                                  >
-                                    Discount Regulations
-                                  </a>
-                                </p>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        {isTouchDevice ? (
+                          <>
+                            <button
+                              onClick={() => setActiveTooltip('discount-regulations')}
+                              className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                            >
+                              <Info className="h-4 w-4" />
+                            </button>
+                            <MobileTooltip
+                              content="A discount on administrative charges applies when a resource consent or s127 application is processed outside statutory timeframes. Learn more about the Discount Regulations."
+                              isOpen={activeTooltip === 'discount-regulations'}
+                              onClose={() => setActiveTooltip(null)}
+                            />
+                          </>
+                        ) : (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Info className="h-4 w-4 text-gray-400" />
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs p-4">
+                                <div className="space-y-2">
+                                  <p>
+                                    A discount on administrative charges applies when a resource
+                                    consent or s127 application is processed outside statutory
+                                    timeframes.
+                                  </p>
+                                  <p className="text-sm text-gray-400">
+                                    Learn more about the{' '}
+                                    <a
+                                      href="https://environment.govt.nz/acts-and-regulations/regulations/discount-on-administrative-charges/"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-500 hover:underline"
+                                    >
+                                      Discount Regulations
+                                    </a>
+                                  </p>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                       </div>
                       <span className="text-sm text-red-600">Discount Required</span>
                     </AlertDescription>
@@ -748,16 +786,37 @@ const ConsentCalculator: React.FC = () => {
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium">Detailed Calculations</span>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger {...tooltipTriggerProps}>
-                        <Info className="h-4 w-4 text-gray-400" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-sm font-normal">View detailed breakdown of time periods</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  {isTouchDevice ? (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveTooltip('detailed-calc');
+                        }}
+                        className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                      >
+                        <Info className="h-4 w-4" />
+                      </button>
+                      <MobileTooltip
+                        content="View detailed breakdown of time periods"
+                        isOpen={activeTooltip === 'detailed-calc'}
+                        onClose={() => setActiveTooltip(null)}
+                      />
+                    </>
+                  ) : (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-4 w-4 text-gray-400" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-sm font-normal">
+                            View detailed breakdown of time periods
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </div>
                 {showAudit ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </Button>
@@ -768,16 +827,32 @@ const ConsentCalculator: React.FC = () => {
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <h4 className="font-medium text-gray-900">Elapsed Time</h4>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger {...tooltipTriggerProps}>
-                            <Info className="h-4 w-4 text-gray-400" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Total time elapsed since lodgement, before considering excluded periods</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      {isTouchDevice ? (
+                        <>
+                          <button
+                            onClick={() => setActiveTooltip('elapsed-time')}
+                            className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                          >
+                            <Info className="h-4 w-4" />
+                          </button>
+                          <MobileTooltip
+                            content="Total time elapsed since lodgement, before considering excluded periods"
+                            isOpen={activeTooltip === 'elapsed-time'}
+                            onClose={() => setActiveTooltip(null)}
+                          />
+                        </>
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Info className="h-4 w-4 text-gray-400" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Total time elapsed since lodgement, before considering excluded periods</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                     <div className="space-y-2 text-sm">
                       <p className="flex justify-between">
@@ -805,25 +880,39 @@ const ConsentCalculator: React.FC = () => {
                   {result.details.holdPeriodDetails.length > 0 && (
                     <div className="p-4">
                       <div className="space-y-4">
-                        {/* Header */}
                         <div className="flex items-center gap-2">
                           <h4 className="font-medium text-gray-900">Excluded Time Periods</h4>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger {...tooltipTriggerProps}>
-                                <Info className="h-4 w-4 text-gray-400" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p className="text-sm">
-                                  Excluded working days as prescribed under s88B of the RMA
-                                </p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          {isTouchDevice ? (
+                            <>
+                              <button
+                                onClick={() => setActiveTooltip('excluded-time')}
+                                className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                              >
+                                <Info className="h-4 w-4" />
+                              </button>
+                              <MobileTooltip
+                                content="Excluded working days as prescribed under s88B of the RMA"
+                                isOpen={activeTooltip === 'excluded-time'}
+                                onClose={() => setActiveTooltip(null)}
+                              />
+                            </>
+                          ) : (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Info className="h-4 w-4 text-gray-400" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-sm">
+                                    Excluded working days as prescribed under s88B of the RMA
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </div>
 
-                        {/* Info Panel */}
-                        <div 
+                        <div
                           className="flex flex-col sm:flex-row items-start sm:items-center
                                      gap-2 text-sm text-blue-800 bg-blue-50 p-3
                                      rounded-md border border-blue-100"
@@ -836,10 +925,9 @@ const ConsentCalculator: React.FC = () => {
                           </span>
                         </div>
 
-                        {/* List of hold periods */}
                         <div className="space-y-3">
                           {result.details.holdPeriodDetails.map((period, index) => (
-                            <div 
+                            <div
                               key={index}
                               className="flex flex-col sm:flex-row justify-between 
                                          items-start sm:items-center text-sm space-y-1 sm:space-y-0 pb-2"
@@ -876,22 +964,37 @@ const ConsentCalculator: React.FC = () => {
                     <div className="p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <h4 className="font-medium text-gray-900">Extension of Time</h4>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger {...tooltipTriggerProps}>
-                              <Info className="h-4 w-4 text-gray-400" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Additional working days under s37 of the RMA</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        {isTouchDevice ? (
+                          <>
+                            <button
+                              onClick={() => setActiveTooltip('extension-time')}
+                              className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                            >
+                              <Info className="h-4 w-4" />
+                            </button>
+                            <MobileTooltip
+                              content="Additional working days under s37 of the RMA"
+                              isOpen={activeTooltip === 'extension-time'}
+                              onClose={() => setActiveTooltip(null)}
+                            />
+                          </>
+                        ) : (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Info className="h-4 w-4 text-gray-400" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Additional working days under s37 of the RMA</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                       </div>
                       <div className="space-y-2 text-sm">
                         {extensions.map((ext, index) => {
                           const parsed = parseInt(ext.days, 10);
                           const displayVal = isNaN(parsed) ? 0 : parsed;
-
                           return (
                             <p key={ext.id} className="flex justify-between">
                               <span className="text-gray-600">
@@ -915,19 +1018,35 @@ const ConsentCalculator: React.FC = () => {
                   <div className="p-4 bg-gray-50">
                     <div className="flex items-center gap-2 mb-3">
                       <h4 className="font-medium text-gray-900">Final Statutory Timeframes</h4>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger {...tooltipTriggerProps}>
-                            <Info className="h-4 w-4 text-gray-400" />
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            <p>
-                              Net processing time compared against statutory timeframes, factoring
-                              in extensions and excluded timeframes
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      {isTouchDevice ? (
+                        <>
+                          <button
+                            onClick={() => setActiveTooltip('final-statutory')}
+                            className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                          >
+                            <Info className="h-4 w-4" />
+                          </button>
+                          <MobileTooltip
+                            content="Net processing time compared against statutory timeframes, factoring in extensions and excluded timeframes"
+                            isOpen={activeTooltip === 'final-statutory'}
+                            onClose={() => setActiveTooltip(null)}
+                          />
+                        </>
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Info className="h-4 w-4 text-gray-400" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p>
+                                Net processing time compared against statutory timeframes, factoring
+                                in extensions and excluded timeframes
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                     <div className="space-y-3 mt-4 text-sm">
                       <p className="flex flex-col sm:flex-row justify-between gap-2">
