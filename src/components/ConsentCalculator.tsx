@@ -27,9 +27,10 @@ interface HoldPeriod {
   end: string;
 }
 
+// CHANGED: Store `days` as a string, so the user can easily delete an initial "0"
 interface Extension {
   id: string;
-  days: number;
+  days: string;
 }
 
 interface WorkingDaysResult {
@@ -103,19 +104,24 @@ const ConsentCalculator: React.FC = () => {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [holdPeriods, setHoldPeriods] = useState<HoldPeriod[]>([]);
+  
+  // CHANGED: We store extension.days as a string
+  // so that we can allow the user to backspace the '0'.
   const [extensions, setExtensions] = useState<Extension[]>([]);
+  
   const [nonWorkingDays, setNonWorkingDays] = useState<Date[]>([]);
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [showAudit, setShowAudit] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [applicationType, setApplicationType] = useState<keyof typeof CONSENT_TYPES>('standard');
 
+  // Load public holidays etc. from CSV
   useEffect(() => {
     const loadNonWorkingDays = async () => {
       try {
         const response: Response = await fetch('/non-working-days.csv');
         const text: string = await response.text();
-
+        
         Papa.parse(text, {
           complete: (results: ParseResult<string[]>) => {
             const parsedDates = results.data
@@ -141,7 +147,7 @@ const ConsentCalculator: React.FC = () => {
     loadNonWorkingDays();
   }, []);
 
-  // Check if a date is a working day
+  // Helper to check if a date is a working day
   const isWorkingDay = (date: Date): boolean => {
     if (isWeekend(date)) return false;
     return !nonWorkingDays.some(holiday =>
@@ -197,7 +203,7 @@ const ConsentCalculator: React.FC = () => {
     return merged;
   };
 
-  // Clamps a hold interval so it only counts within the main date range
+  // Only count portions of hold intervals that lie within the main date range
   const clampIntervalToRange = (
     holdStart: Date, 
     holdEnd: Date, 
@@ -227,26 +233,26 @@ const ConsentCalculator: React.FC = () => {
     setHoldPeriods([...holdPeriods, newHoldPeriod]);
   };
 
-  // Remove a hold period
+  // Remove hold period
   const removeHoldPeriod = (id: string) => {
     setHoldPeriods(holdPeriods.filter(period => period.id !== id));
   };
 
-  // Add a new extension
+  // CHANGED: new extension has days: '', empty by default
   const addExtension = () => {
     const newExtension: Extension = {
       id: crypto.randomUUID(),
-      days: 0
+      days: ''
     };
     setExtensions([...extensions, newExtension]);
   };
 
-  // Remove an extension
+  // Remove extension
   const removeExtension = (id: string) => {
     setExtensions(extensions.filter(ext => ext.id !== id));
   };
 
-  // Calculate final result
+  // Calculation function
   const calculateResult = () => {
     setValidationError(null);
 
@@ -269,14 +275,11 @@ const ConsentCalculator: React.FC = () => {
       return;
     }
 
-    // (1) Calculate total working days
+    // 1) total working days in main period
     const { workingDays: totalDays, weekends, holidays } = calculateWorkingDays(mainStart, mainEnd);
 
-    // (2) Convert hold periods to intervals & clamp them
-    const holdIntervals: Array<{
-      type: string;
-      interval: DateInterval;
-    }> = holdPeriods
+    // 2) hold intervals
+    const holdIntervals = holdPeriods
       .filter(p => p.start && p.end)
       .map(p => ({
         type: p.type,
@@ -285,9 +288,7 @@ const ConsentCalculator: React.FC = () => {
           end: new Date(p.end),
         },
       }))
-      .filter(({ interval }) => 
-        !isNaN(interval.start.getTime()) && !isNaN(interval.end.getTime())
-      )
+      .filter(({ interval }) => !isNaN(interval.start.getTime()) && !isNaN(interval.end.getTime()))
       .map(obj => {
         const clamped = clampIntervalToRange(obj.interval.start, obj.interval.end, mainStart, mainEnd);
         return {
@@ -295,12 +296,9 @@ const ConsentCalculator: React.FC = () => {
           interval: clamped,
         };
       })
-      .filter(obj => obj.interval !== null) as Array<{
-        type: string;
-        interval: DateInterval;
-      }>;
+      .filter(obj => obj.interval !== null) as Array<{ type: string; interval: DateInterval }>;
 
-    // (3) For display in the audit
+    // 3) holdPeriodDetails for display
     const holdPeriodDetails = holdIntervals.map(obj => {
       const { workingDays } = calculateWorkingDays(obj.interval.start, obj.interval.end);
       return {
@@ -311,23 +309,26 @@ const ConsentCalculator: React.FC = () => {
       };
     });
 
-    // (4) Merge intervals & avoid double-count
+    // 4) merge intervals to avoid double counting
     const merged = mergeIntervals(holdIntervals.map(h => h.interval));
-    // (5) Sum up holdDays
+    // 5) sum hold days
     let holdDays = 0;
     merged.forEach(({ start, end }) => {
       const { workingDays } = calculateWorkingDays(start, end);
       holdDays += workingDays;
     });
 
-    // (6) Extension days
-    const extensionDays = extensions.reduce((sum, ext) => sum + (ext.days || 0), 0);
+    // 6) parse extensionDays from the stored strings
+    const extensionDays = extensions.reduce((sum, ext) => {
+      const parsed = parseInt(ext.days, 10);
+      return sum + (isNaN(parsed) ? 0 : parsed);
+    }, 0);
 
-    // (7) Base working days from applicationType
+    // 7) baseDays from the consent type
     const baseDays = CONSENT_TYPES[applicationType].baseDays;
     const maxDays = baseDays + extensionDays;
 
-    // (8) Final working days
+    // 8) final days
     const finalDays = totalDays - holdDays;
 
     setResult({
@@ -347,19 +348,17 @@ const ConsentCalculator: React.FC = () => {
 
   return (
     <Card 
-      className="w-full max-w-2xl mx-auto shadow-lg border-0 min-w-[320px] 
+      className="w-full max-w-2xl mx-auto shadow-lg border-0 min-w-[320px]
                  overflow-hidden bg-white sm:rounded-lg"
     >
       <CardHeader className="bg-gradient-to-r from-[#3c5c17] to-[#6ba32a] text-white pb-6">
         <CardTitle className="text-2xl font-bold">RMA Timeframes Calculator</CardTitle>
         <p className="text-sm opacity-80 mt-1">
-          Calculate processing timeframes for resource consent applications
+          A tool for calculating processing timeframes for resource consent applications. Brought to you by CoLab Planning.
         </p>
       </CardHeader>
 
-      {/* MAIN CONTENT */}
       <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-
         {/* Application Type Box */}
         <div className="bg-gray-100 p-4 sm:p-6 border border-gray-100 shadow-inner rounded-lg">
           <div className="space-y-1">
@@ -384,10 +383,10 @@ const ConsentCalculator: React.FC = () => {
           </select>
         </div>
 
-        {/* Date inputs section */}
+        {/* Date Inputs */}
         <div className="bg-gray-100 rounded-lg p-4 sm:p-6 border border-gray-100 shadow-inner">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
-            {/* Lodgement Date Input */}
+            {/* Lodgement Date */}
             <div className="space-y-3">
               <h3 className="text-base font-semibold text-gray-700">
                 Lodgement Date
@@ -407,7 +406,7 @@ const ConsentCalculator: React.FC = () => {
               />
             </div>
 
-            {/* Decision Date Input */}
+            {/* Decision Date */}
             <div className="space-y-3">
               <h3 className="text-base font-semibold text-gray-700">
                 Decision Date
@@ -428,31 +427,29 @@ const ConsentCalculator: React.FC = () => {
           </div>
         </div>
 
-        {/* Hold Periods */}
+        {/* Excluded Time Periods */}
         <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-100 shadow-inner">
-          {/* Header with Add Button */}
-          <div className="flex items-center justify-between mb-4 sm:mb-6">
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold text-gray-700">Excluded Time Periods</h3>
-              <p className="text-xs text-gray-500">
-                Add excluded timeframes, i.e. on hold periods
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addHoldPeriod}
-              className="bg-white hover:bg-[#3c5c17] hover:text-white border-[#3c5c17] 
-                         text-[#3c5c17] transition-colors duration-200 flex items-center
-                         gap-2 px-3 py-2 text-sm sm:text-base whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Time Period</span>
-              <span className="sm:hidden">Add</span>
-            </Button>
-          </div>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4 sm:mb-6">
+        <div className="space-y-1 max-w-[70%] sm:max-w-none">
+            <h3 className="text-base font-semibold text-gray-700">Excluded Time Periods</h3>
+            <p className="text-xs text-gray-500">
+            Add excluded timeframes, i.e. on hold periods
+            </p>
+        </div>
+        <Button
+            variant="outline"
+            size="sm"
+            onClick={addHoldPeriod}
+            className="bg-white hover:bg-[#3c5c17] hover:text-white border-[#3c5c17] 
+                    text-[#3c5c17] transition-colors duration-200 flex items-center
+                    gap-2 px-3 py-2 text-sm sm:text-base whitespace-nowrap self-end sm:self-auto"
+        >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Add Time Period</span>
+            <span className="sm:hidden">Add</span>
+        </Button>
+        </div>
 
-          {/* Hold Period Entries */}
           <div className="space-y-4">
             {holdPeriods.map((period) => (
               <div
@@ -460,7 +457,6 @@ const ConsentCalculator: React.FC = () => {
                 className="bg-white p-3 sm:p-4 rounded-md border border-gray-200 
                            shadow-sm relative"
               >
-                {/* Delete Button */}
                 <div className="absolute top-3 right-3">
                   <Button
                     variant="ghost"
@@ -473,7 +469,7 @@ const ConsentCalculator: React.FC = () => {
                   </Button>
                 </div>
 
-                {/* Type Selection Row */}
+                {/* Hold Type */}
                 <div className="mb-4 pr-12">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     Hold Type
@@ -499,7 +495,7 @@ const ConsentCalculator: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Date Range Row */}
+                {/* Start & End Dates */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">
@@ -507,9 +503,9 @@ const ConsentCalculator: React.FC = () => {
                     </label>
                     <input
                       type="date"
-                      className="p-2 sm:p-2.5 border border-gray-200 rounded-md w-full
-                                 focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                                 text-sm sm:text-base"
+                      className="p-2 sm:p-2.5 border border-gray-200 
+                                 rounded-md w-full focus:ring-2 focus:ring-[#3c5c17] 
+                                 focus:border-[#3c5c17] text-sm sm:text-base"
                       value={period.start}
                       onChange={(e) => {
                         const newPeriods = holdPeriods.map((p) =>
@@ -525,9 +521,9 @@ const ConsentCalculator: React.FC = () => {
                     </label>
                     <input
                       type="date"
-                      className="p-2 sm:p-2.5 border border-gray-200 rounded-md w-full
-                                 focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                                 text-sm sm:text-base"
+                      className="p-2 sm:p-2.5 border border-gray-200 
+                                 rounded-md w-full focus:ring-2 focus:ring-[#3c5c17]
+                                 focus:border-[#3c5c17] text-sm sm:text-base"
                       value={period.end}
                       onChange={(e) => {
                         const newPeriods = holdPeriods.map((p) =>
@@ -551,21 +547,20 @@ const ConsentCalculator: React.FC = () => {
           </div>
         </div>
 
-        {/* Extensions Section */}
+        {/* Extensions (s37) */}
         <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-100 shadow-inner">
-          {/* Header with Add Button */}
-          <div className="flex items-center justify-between mb-4 sm:mb-6">
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold text-gray-700">Extension of Time (s37)</h3>
-              <p className="text-xs text-gray-500">Add additional time under s37</p>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4 sm:mb-6">
+            <div className="space-y-1 max-w-[70%] sm:max-w-none">
+                <h3 className="text-base font-semibold text-gray-700">Extension of Time (s37)</h3>
+                <p className="text-xs text-gray-500">Add additional time under s37</p>
             </div>
             <Button
-              variant="outline"
-              size="sm"
-              onClick={addExtension}
-              className="bg-white hover:bg-[#3c5c17] hover:text-white border-[#3c5c17] 
-                         text-[#3c5c17] transition-colors duration-200 flex items-center
-                         gap-2 px-3 py-2 text-sm sm:text-base whitespace-nowrap"
+                variant="outline"
+                size="sm"
+                onClick={addExtension}
+                className="bg-white hover:bg-[#3c5c17] hover:text-white border-[#3c5c17]
+                        text-[#3c5c17] transition-colors duration-200 flex items-center
+                        gap-2 px-3 py-2 text-sm sm:text-base whitespace-nowrap self-end sm:self-auto"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Extension</span>
@@ -573,7 +568,6 @@ const ConsentCalculator: React.FC = () => {
             </Button>
           </div>
 
-          {/* Extension Entries */}
           <div className="space-y-4">
             {extensions.map((extension) => (
               <div
@@ -581,7 +575,6 @@ const ConsentCalculator: React.FC = () => {
                 className="bg-white p-3 sm:p-4 rounded-md border border-gray-200 
                            shadow-sm relative"
               >
-                {/* Delete Button */}
                 <div className="absolute top-3 right-3">
                   <Button
                     variant="ghost"
@@ -593,7 +586,6 @@ const ConsentCalculator: React.FC = () => {
                   </Button>
                 </div>
 
-                {/* Extension Days Input */}
                 <div className="pr-12">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     Additional Days
@@ -601,12 +593,17 @@ const ConsentCalculator: React.FC = () => {
                   <input
                     type="number"
                     className="w-48 p-2 sm:p-2.5 border border-gray-200 rounded-md 
-                               shadow-sm text-sm sm:text-base focus:ring-2 focus:ring-[#3c5c17]
-                               focus:border-[#3c5c17]"
+                               shadow-sm text-sm sm:text-base focus:ring-2 
+                               focus:ring-[#3c5c17] focus:border-[#3c5c17]"
+                    // Show the stored string. If empty, the field is empty (i.e. user can type).
                     value={extension.days}
                     onChange={(e) => {
+                      // Store the raw string. We'll parse it later at calculation time.
+                      const newVal = e.target.value;
+                      // let them type negative or letters? Usually no, but let's do a basic check:
+                      // We'll do a simpler approach: just store it as-is. We'll parse at the end.
                       const newExtensions = extensions.map(ext =>
-                        ext.id === extension.id ? { ...ext, days: Number(e.target.value) } : ext
+                        ext.id === extension.id ? { ...ext, days: newVal } : ext
                       );
                       setExtensions(newExtensions);
                     }}
@@ -617,9 +614,8 @@ const ConsentCalculator: React.FC = () => {
               </div>
             ))}
 
-            {/* Empty State */}
             {extensions.length === 0 && (
-              <div className="text-center py-6 text-gray-500 bg-white rounded-md 
+              <div className="text-center py-6 text-gray-500 bg-white rounded-md
                               border border-dashed border-gray-300">
                 <p className="text-sm">No extensions added yet</p>
               </div>
@@ -627,7 +623,7 @@ const ConsentCalculator: React.FC = () => {
           </div>
         </div>
 
-        {/* Validation Error Alert */}
+        {/* Validation Error */}
         {validationError && (
           <Alert variant="destructive" className="bg-red-50 border-red-200">
             <AlertDescription className="flex items-center gap-2">
@@ -639,9 +635,9 @@ const ConsentCalculator: React.FC = () => {
 
         {/* Calculate Button */}
         <Button
-          className={`w-full flex items-center justify-center gap-2 ${
+          className={`w-full flex items-center justify-center gap-2 text-sm sm:text-base py-3 ${
             validationError ? 'bg-opacity-90' : ''
-          } text-sm sm:text-base py-3`}
+          }`}
           onClick={calculateResult}
         >
           <Calculator className="w-4 h-4" />
@@ -652,20 +648,16 @@ const ConsentCalculator: React.FC = () => {
         {result && (
           <div className="space-y-4 sm:space-y-6">
             {/* Main Results Card */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm 
-                            overflow-hidden">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
               {/* Results Header */}
               <div className="bg-gradient-to-r from-[#3c5c17] to-[#6ba32a] p-4 sm:p-6">
-                <h3 className="text-xl sm:text-2xl font-semibold text-white">
-                  Calculation Results
-                </h3>
+                <h3 className="text-xl sm:text-2xl font-semibold text-white">Calculation Results</h3>
               </div>
 
               {/* Results Content */}
               <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 {/* Working Days Display */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center 
-                                justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
                   <div className="mb-2 sm:mb-0">
                     <div className="flex items-center gap-1 text-gray-700 font-medium">
                       Working Days
@@ -694,8 +686,9 @@ const ConsentCalculator: React.FC = () => {
                 {/* Status Alert */}
                 {result.isOvertime ? (
                   <Alert variant="destructive" className="bg-red-50 border-red-200">
-                    <AlertDescription className="flex flex-col sm:flex-row
-                                                items-start sm:items-center justify-between">
+                    <AlertDescription 
+                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between"
+                    >
                       <div className="flex items-start sm:items-center gap-2 mb-2 sm:mb-0">
                         <span className="text-red-800 font-medium">
                           Over time limit by {result.finalDays - result.maxDays} working days
@@ -707,14 +700,14 @@ const ConsentCalculator: React.FC = () => {
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs p-4">
                               <div className="space-y-2">
-                                <p>A discount on administrative charges applies when a 
-                                   resource consent or s127 application is processed 
-                                   outside statutory timeframes.</p>
+                                <p>A discount on administrative charges applies when a resource 
+                                   consent or s127 application is processed outside statutory 
+                                   timeframes.</p>
                                 <p className="text-sm text-gray-400">
                                   Learn more about the{' '}
-                                  <a 
-                                    href="https://environment.govt.nz/acts-and-regulations/regulations/discount-on-administrative-charges/" 
-                                    target="_blank" 
+                                  <a
+                                    href="https://environment.govt.nz/acts-and-regulations/regulations/discount-on-administrative-charges/"
+                                    target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-blue-500 hover:underline"
                                   >
@@ -731,9 +724,9 @@ const ConsentCalculator: React.FC = () => {
                   </Alert>
                 ) : (
                   <Alert className="bg-green-50 border-green-200">
-                    <AlertDescription className="flex flex-col sm:flex-row 
-                                                items-start sm:items-center 
-                                                justify-between">
+                    <AlertDescription 
+                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between"
+                    >
                       <span className="text-green-800 font-medium">
                         Application is within time
                       </span>
@@ -743,8 +736,7 @@ const ConsentCalculator: React.FC = () => {
                 )}
 
                 {/* Quick Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 
-                                pt-4 border-t border-gray-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-4 border-t border-gray-100">
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Total Calendar Days</div>
                     <div className="text-2xl sm:text-3xl font-semibold text-gray-900">
@@ -776,24 +768,16 @@ const ConsentCalculator: React.FC = () => {
                         <Info className="h-4 w-4 text-gray-400" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p className="text-sm font-normal">
-                          View detailed breakdown of time periods
-                        </p>
+                        <p className="text-sm font-normal">View detailed breakdown of time periods</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                {showAudit ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
+                {showAudit ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </Button>
 
               {showAudit && (
-                <div className="mt-2 bg-white rounded-lg border border-gray-200 
-                                divide-y divide-gray-100">
-
+                <div className="mt-2 bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
                   {/* Elapsed Time Calculations */}
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-3">
@@ -824,8 +808,7 @@ const ConsentCalculator: React.FC = () => {
                         <span className="text-gray-600">Holidays:</span>
                         <span className="font-medium">-{result.details.holidays}</span>
                       </p>
-                      <p className="flex justify-between text-gray-900 font-medium 
-                                    border-t border-gray-100 pt-2">
+                      <p className="flex justify-between text-gray-900 font-medium border-t border-gray-100 pt-2">
                         <span>Elapsed Working Days:</span>
                         <span>{result.totalDays}</span>
                       </p>
@@ -836,7 +819,7 @@ const ConsentCalculator: React.FC = () => {
                   {result.details.holdPeriodDetails.length > 0 && (
                     <div className="p-4">
                       <div className="space-y-4">
-                        {/* Header - Simplified with just the title */}
+                        {/* Header */}
                         <div className="flex items-center gap-2">
                           <h4 className="font-medium text-gray-900">Excluded Time Periods</h4>
                           <TooltipProvider>
@@ -853,37 +836,37 @@ const ConsentCalculator: React.FC = () => {
                           </TooltipProvider>
                         </div>
 
-                        {/* Info Panel - Always visible explanation */}
+                        {/* Info Panel */}
                         <div 
-                          className="flex flex-col sm:flex-row items-start sm:items-center 
-                                     gap-2 text-sm text-blue-800 bg-blue-50 p-3 
+                          className="flex flex-col sm:flex-row items-start sm:items-center
+                                     gap-2 text-sm text-blue-800 bg-blue-50 p-3
                                      rounded-md border border-blue-100"
                         >
                           <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-1 sm:mt-0" />
                           <span>
                             Date ranges shown here include all calendar days, but working day counts
-                            excludes weekends, public holidays, and the period between 
+                            excludes weekends, public holidays, and the period between
                             20 December and 10 January.
                           </span>
                         </div>
 
                         {/* Hold Periods List */}
                         <div className="space-y-3">
-                          {result.details.holdPeriodDetails.map((period, index) => (
-                            <div 
-                              key={index} 
-                              className="flex justify-between items-center text-sm"
-                            >
-                              <span className="text-gray-600">
+                        {result.details.holdPeriodDetails.map((period, index) => (
+                            <div key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-sm space-y-1 sm:space-y-0 pb-2">
+                                <span className="text-gray-600">
                                 {HOLD_PERIOD_TYPES[period.type as keyof typeof HOLD_PERIOD_TYPES]}
-                              </span>
-                              <span className="font-medium">
-                                {period.days} {period.days === 1 ? 'day' : 'days'} (
-                                {format(new Date(period.start), 'dd/MM/yyyy')} - 
-                                {format(new Date(period.end), 'dd/MM/yyyy')})
-                              </span>
+                                </span>
+                                <span className="font-medium whitespace-nowrap">
+                                {period.days} {period.days === 1 ? 'day ' : 'days '}
+                                <span className="block sm:inline text-gray-500">
+                                    ({format(new Date(period.start), 'dd/MM/yyyy')}
+                                    <span className="mx-1">–</span>
+                                    {format(new Date(period.end), 'dd/MM/yyyy')})
+                                </span>
+                                </span>
                             </div>
-                          ))}
+                            ))}
                           {result.details.holdPeriodDetails.length > 1 && (
                             <p className="text-xs text-gray-500 italic">
                               Note: Overlapping periods are only counted once in the total
@@ -915,16 +898,22 @@ const ConsentCalculator: React.FC = () => {
                         </TooltipProvider>
                       </div>
                       <div className="space-y-2 text-sm">
-                        {extensions.map((ext, index) => (
-                          <p key={ext.id} className="flex justify-between">
-                            <span className="text-gray-600">
-                              Extension {index + 1}:
-                            </span>
-                            <span className="font-medium">
-                              {ext.days} {ext.days === 1 ? 'day' : 'days'}
-                            </span>
-                          </p>
-                        ))}
+                        {extensions.map((ext, index) => {
+                          // parse the stored string just for display
+                          const parsed = parseInt(ext.days, 10);
+                          const displayVal = isNaN(parsed) ? 0 : parsed;
+
+                          return (
+                            <p key={ext.id} className="flex justify-between">
+                              <span className="text-gray-600">
+                                Extension {index + 1}:
+                              </span>
+                              <span className="font-medium">
+                                {displayVal} {displayVal === 1 ? 'day' : 'days'}
+                              </span>
+                            </p>
+                          );
+                        })}
                         <p className="flex justify-between text-gray-900 font-medium pt-2">
                           <span>Total Extension Days:</span>
                           <span>+{result.extensionDays}</span>
@@ -936,39 +925,41 @@ const ConsentCalculator: React.FC = () => {
                   {/* Statutory Timeframe Summary */}
                   <div className="p-4 bg-gray-50">
                     <div className="flex items-center gap-2 mb-3">
-                      <h4 className="font-medium text-gray-900">Final Statutory Timeframes</h4>
-                      <TooltipProvider>
+                        <h4 className="font-medium text-gray-900">Final Statutory Timeframes</h4>
+                        <TooltipProvider>
                         <Tooltip>
-                          <TooltipTrigger>
+                            <TooltipTrigger>
                             <Info className="h-4 w-4 text-gray-400" />
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            <p>Net processing time compared against statutory timeframes, factoring in extensions and excluded timeframes</p>
-                          </TooltipContent>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                            <p>
+                                Net processing time compared against statutory timeframes, factoring
+                                in extensions and excluded timeframes
+                            </p>
+                            </TooltipContent>
                         </Tooltip>
-                      </TooltipProvider>
+                        </TooltipProvider>
                     </div>
-                    <div className="space-y-2 text-sm">
-                      <p className="flex justify-between">
+                    {/* Extra spacing for clarity */}
+                    <div className="space-y-3 mt-4 text-sm">
+                    <p className="flex flex-col sm:flex-row justify-between gap-2">
                         <span className="text-gray-600">Base Timeframe:</span>
                         <span className="font-medium">
-                          {CONSENT_TYPES[applicationType].baseDays} working days
+                        {CONSENT_TYPES[applicationType].baseDays} working days
                         </span>
-                      </p>
-                      <p className="flex justify-between">
+                    </p>
+                    <p className="flex flex-col sm:flex-row justify-between gap-2">
                         <span className="text-gray-600">Total Extension Days:</span>
                         <span className="font-medium">+{result.extensionDays}</span>
-                      </p>
-                      <p className="flex justify-between text-gray-700 font-medium 
-                                    border-t border-gray-200 pt-2">
+                    </p>
+                    <p className="flex flex-col sm:flex-row justify-between gap-2 text-gray-700 font-medium border-t border-gray-200 pt-3">
                         <span>Net Statutory Timeframe:</span>
                         <span>{result.maxDays} working days</span>
-                      </p>
-                      <p className="flex justify-between text-gray-900 font-medium text-base 
-                                    pt-2 border-t border-gray-200">
+                    </p>
+                    <p className="flex flex-col sm:flex-row justify-between gap-2 text-gray-900 font-medium text-base pt-3 border-t border-gray-200">
                         <span>Net Processing Time:</span>
                         <span>{result.finalDays} working days</span>
-                      </p>
+                    </p>
                     </div>
                   </div>
                 </div>
