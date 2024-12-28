@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Alert, AlertDescription } from "../components/ui/alert";
@@ -29,11 +29,14 @@ const isTouchDevice =
  * A simple full-screen modal-based tooltip for mobile.
  * Shows content in a dismissible panel at bottom.
  */
-const MobileTooltip: React.FC<{
-  content: string;
+interface MobileTooltipProps {
+  content: ReactNode;     // <-- Updated to ReactNode
   isOpen: boolean;
   onClose: () => void;
-}> = ({ content, isOpen, onClose }) => {
+  hasLink?: boolean;
+}
+
+const MobileTooltip: React.FC<MobileTooltipProps> = ({ content, isOpen, onClose, hasLink }) => {
   if (!isOpen) return null;
 
   return (
@@ -45,7 +48,19 @@ const MobileTooltip: React.FC<{
         className="bg-white rounded-lg p-4 max-w-sm w-full shadow-lg"
         onClick={e => e.stopPropagation()}
       >
-        <p className="text-sm mb-4">{content}</p>
+        <div className="text-sm mb-4 text-gray-900">
+          {typeof content === 'string' ? <p>{content}</p> : content}
+          {hasLink && (
+            <a
+              href="https://environment.govt.nz/acts-and-regulations/regulations/discount-on-administrative-charges/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block mt-2 text-[#3c5c17] hover:underline"
+            >
+              Learn more about the Discount Regulations
+            </a>
+          )}
+        </div>
         <Button onClick={onClose} className="w-full bg-[#3c5c17] hover:bg-[#2e4512] text-white">
           Close
         </Button>
@@ -348,7 +363,7 @@ const ConsentCalculator: React.FC = () => {
     });
   };
 
-   return (
+  return (
     <Card className="w-full max-w-2xl mx-auto shadow-lg border-0 min-w-[320px] overflow-hidden bg-white sm:rounded-lg">
       <CardHeader className="bg-gradient-to-r from-[#3c5c17] to-[#6ba32a] text-white pb-6">
         <CardTitle className="text-2xl font-bold">RMA Timeframes Calculator</CardTitle>
@@ -400,7 +415,8 @@ const ConsentCalculator: React.FC = () => {
                 className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                            focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
                            transition-colors duration-200 text-gray-900 text-sm sm:text-base
-                           -webkit-appearance: none"
+                           -webkit-appearance: none appearance-none
+                           min-h-[42px] sm:min-h-[48px]"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
@@ -419,7 +435,8 @@ const ConsentCalculator: React.FC = () => {
                 className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                            focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
                            transition-colors duration-200 text-gray-900 text-sm sm:text-base
-                           -webkit-appearance: none"
+                           -webkit-appearance: none appearance-none
+                           min-h-[42px] sm:min-h-[48px]"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
@@ -713,6 +730,7 @@ const ConsentCalculator: React.FC = () => {
                               content="A discount on administrative charges applies when a resource consent or s127 application is processed outside statutory timeframes. Learn more about the Discount Regulations."
                               isOpen={activeTooltip === 'discount-regulations'}
                               onClose={() => setActiveTooltip(null)}
+                              hasLink={true}  // Ensure link is shown on mobile
                             />
                           </>
                         ) : (
@@ -798,7 +816,7 @@ const ConsentCalculator: React.FC = () => {
                         <Info className="h-4 w-4" />
                       </button>
                       <MobileTooltip
-                        content="View detailed breakdown of time periods"
+                        content={<div className="font-normal">View detailed breakdown of time periods</div>}
                         isOpen={activeTooltip === 'detailed-calc'}
                         onClose={() => setActiveTooltip(null)}
                       />
