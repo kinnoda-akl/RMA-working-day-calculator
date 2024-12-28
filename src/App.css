@@ -53,13 +53,24 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   #root {
     padding: 1rem;
   }
-  
+
+  /* Force single-column for grids that had 2 or 4 columns */
   .grid-cols-2 {
     grid-template-columns: 1fr !important;
   }
-  
   .grid-cols-4 {
     grid-template-columns: 1fr !important;
+  }
+
+  /* Adjust large headings or big spacing on smaller screens */
+  .text-3xl {
+    font-size: 1.5rem !important;
+  }
+  .p-6 {
+    padding: 1rem !important;
+  }
+  .gap-8 {
+    gap: 1rem !important;
   }
 }
 
