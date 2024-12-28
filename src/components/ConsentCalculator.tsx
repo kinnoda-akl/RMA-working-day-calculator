@@ -686,7 +686,7 @@ const ConsentCalculator: React.FC = () => {
                             <Info className="h-4 w-4" />
                           </button>
                           <MobileTooltip
-                            content="Working days as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January"
+                            content={<div className="font-normal text-left">Working days as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January</div>}
                             isOpen={activeTooltip === 'working-days'}
                             onClose={() => setActiveTooltip(null)}
                           />
