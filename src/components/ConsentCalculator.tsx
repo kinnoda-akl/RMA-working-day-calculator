@@ -490,7 +490,6 @@ const ConsentCalculator: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     Hold Type
                   </label>
-                  {/* Updated styling for hold-type select */}
                   <select
                     className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                                focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
@@ -518,7 +517,6 @@ const ConsentCalculator: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-600 mb-2">
                       Start Date
                     </label>
-                    {/* Updated styling for Start Date */}
                     <input
                       type="date"
                       className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
@@ -539,7 +537,6 @@ const ConsentCalculator: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-600 mb-2">
                       End Date
                     </label>
-                    {/* Updated styling for End Date */}
                     <input
                       type="date"
                       className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
@@ -689,7 +686,7 @@ const ConsentCalculator: React.FC = () => {
                             <Info className="h-4 w-4" />
                           </button>
                           <MobileTooltip
-                            content={<div className="font-normal text-left">Working days as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January</div>}
+                            content="Working days as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January"
                             isOpen={activeTooltip === 'working-days'}
                             onClose={() => setActiveTooltip(null)}
                           />
@@ -734,11 +731,12 @@ const ConsentCalculator: React.FC = () => {
                             >
                               <Info className="h-4 w-4" />
                             </button>
+                            {/* Notice we removed any reference to “Learn more about the Discount Regulations” in the content below. */}
                             <MobileTooltip
-                              content="A discount on administrative charges applies when a resource consent or s127 application is processed outside statutory timeframes. Learn more about the Discount Regulations."
+                              content="A discount on administrative charges applies when a resource consent or s127 application is processed outside statutory timeframes."
                               isOpen={activeTooltip === 'discount-regulations'}
                               onClose={() => setActiveTooltip(null)}
-                              hasLink={true}  // Ensure link is shown on mobile
+                              hasLink={true}  // Link is appended automatically
                             />
                           </>
                         ) : (
@@ -823,7 +821,6 @@ const ConsentCalculator: React.FC = () => {
                       >
                         <Info className="h-4 w-4" />
                       </button>
-                      {/* FIX centre alignment by adding 'text-left' */}
                       <MobileTooltip
                         content={<div className="font-normal text-left">View detailed breakdown of time periods</div>}
                         isOpen={activeTooltip === 'detailed-calc'}
