@@ -386,7 +386,7 @@ const ConsentCalculator: React.FC = () => {
             className="w-full mt-3 p-2 sm:p-2.5 border border-gray-200 rounded-md shadow-sm
                        text-sm sm:text-base focus:ring-2 focus:ring-[#3c5c17] 
                        focus:border-[#3c5c17]
-                       -webkit-appearance: none"
+                       -webkit-appearance: none appearance-none"
             value={applicationType}
             onChange={(e) => setApplicationType(e.target.value as keyof typeof CONSENT_TYPES)}
           >
@@ -490,11 +490,13 @@ const ConsentCalculator: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     Hold Type
                   </label>
+                  {/* Updated styling for hold-type select */}
                   <select
-                    className="w-full p-2 sm:p-2.5 border border-gray-200 
-                               rounded-md shadow-sm text-sm sm:text-base 
+                    className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                                focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                               -webkit-appearance: none"
+                               transition-colors duration-200 text-gray-900 text-sm sm:text-base
+                               -webkit-appearance: none appearance-none
+                               min-h-[42px] sm:min-h-[48px] bg-white"
                     value={period.type}
                     onChange={(e) => {
                       const newPeriods = holdPeriods.map((p) =>
@@ -516,11 +518,14 @@ const ConsentCalculator: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-600 mb-2">
                       Start Date
                     </label>
+                    {/* Updated styling for Start Date */}
                     <input
                       type="date"
-                      className="p-2 sm:p-2.5 border border-gray-200 rounded-md w-full
+                      className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                                  focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                                 text-sm sm:text-base -webkit-appearance: none"
+                                 transition-colors duration-200 text-gray-900 text-sm sm:text-base
+                                 -webkit-appearance: none appearance-none
+                                 min-h-[42px] sm:min-h-[48px]"
                       value={period.start}
                       onChange={(e) => {
                         const newPeriods = holdPeriods.map((p) =>
@@ -534,11 +539,14 @@ const ConsentCalculator: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-600 mb-2">
                       End Date
                     </label>
+                    {/* Updated styling for End Date */}
                     <input
                       type="date"
-                      className="p-2 sm:p-2.5 border border-gray-200 rounded-md w-full
+                      className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                                  focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                                 text-sm sm:text-base -webkit-appearance: none"
+                                 transition-colors duration-200 text-gray-900 text-sm sm:text-base
+                                 -webkit-appearance: none appearance-none
+                                 min-h-[42px] sm:min-h-[48px]"
                       value={period.end}
                       onChange={(e) => {
                         const newPeriods = holdPeriods.map((p) =>
@@ -681,7 +689,7 @@ const ConsentCalculator: React.FC = () => {
                             <Info className="h-4 w-4" />
                           </button>
                           <MobileTooltip
-                            content="Working days as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January"
+                            content={<div className="font-normal text-left">Working days as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January</div>}
                             isOpen={activeTooltip === 'working-days'}
                             onClose={() => setActiveTooltip(null)}
                           />
@@ -815,8 +823,9 @@ const ConsentCalculator: React.FC = () => {
                       >
                         <Info className="h-4 w-4" />
                       </button>
+                      {/* FIX centre alignment by adding 'text-left' */}
                       <MobileTooltip
-                        content={<div className="font-normal">View detailed breakdown of time periods</div>}
+                        content={<div className="font-normal text-left">View detailed breakdown of time periods</div>}
                         isOpen={activeTooltip === 'detailed-calc'}
                         onClose={() => setActiveTooltip(null)}
                       />
