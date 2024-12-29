@@ -385,11 +385,23 @@ const ConsentCalculator: React.FC = () => {
   return (
     <Card className="w-full max-w-2xl mx-auto shadow-lg border-0 min-w-[320px] overflow-hidden bg-white sm:rounded-lg">
       <CardHeader className="bg-gradient-to-r from-[#3c5c17] to-[#6ba32a] text-white pb-6">
-        <CardTitle className="text-2xl font-bold">RMA Timeframes Calculator</CardTitle>
-        <p className="text-sm opacity-80 mt-1">
-          A tool for calculating processing timeframes for resource consent applications under the Resource Management Act 1991. Brought to you by CoLab Planning.
-        </p>
-      </CardHeader>
+  <CardTitle className="text-2xl font-bold mb-2">RMA Timeframes Calculator</CardTitle>
+  <p className="text-sm opacity-90">
+    A tool for calculating processing timeframes for resource consent applications under the Resource Management Act 1991.
+  </p>
+  <p className="text-sm mt-2">
+    Part of the{' '}
+    <a 
+      href="https://www.colabplanning.co.nz/tools" 
+      className="text-white underline decoration-white/50 hover:decoration-white transition-all duration-200 font-medium"
+      target="_blank" 
+      rel="noopener noreferrer"
+    >
+      CoLab Planning Tools
+    </a>
+    {' '}suite.
+  </p>
+</CardHeader>
 
       <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Application Type Box */}
