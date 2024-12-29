@@ -61,7 +61,11 @@ const MobileTooltip: React.FC<MobileTooltipProps> = ({ content, isOpen, onClose,
             </a>
           )}
         </div>
-        <Button onClick={onClose} className="w-full bg-[#3c5c17] hover:bg-[#2e4512] text-white">
+        <Button 
+          onClick={onClose} 
+          className="w-full bg-[#3c5c17] hover:bg-[#2e4512] text-white"
+          type="button"
+        >
           Close
         </Button>
       </div>
@@ -376,13 +380,21 @@ const ConsentCalculator: React.FC = () => {
         {/* Application Type Box */}
         <div className="bg-gray-100 p-4 sm:p-6 border border-gray-100 shadow-inner rounded-lg">
           <div className="space-y-1">
-            <h3 className="text-base font-semibold text-gray-700">Application Type</h3>
+            <label 
+              htmlFor="applicationType" 
+              className="text-base font-semibold text-gray-700 block"
+            >
+              Application Type
+            </label>
             <p className="text-xs text-gray-500">
               Select the application type to set the timeframes that will apply
             </p>
           </div>
 
           <select
+            id="applicationType"
+            name="applicationType"
+            title="Application Type"
             className="w-full mt-3 p-2 sm:p-2.5 border border-gray-200 rounded-md shadow-sm
                        text-sm sm:text-base focus:ring-2 focus:ring-[#3c5c17] 
                        focus:border-[#3c5c17]
@@ -403,15 +415,22 @@ const ConsentCalculator: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
             {/* Lodgement Date */}
             <div className="space-y-3">
-              <h3 className="text-base font-semibold text-gray-700">
+              <label
+                htmlFor="lodgementDate"
+                className="text-base font-semibold text-gray-700"
+              >
                 Lodgement Date
                 <span className="ml-1 font-normal text-gray-500">(Day 0)</span>
                 <span className="block text-xs font-normal text-gray-500 mt-1">
                   Start of processing timeframe
                 </span>
-              </h3>
+              </label>
               <input
+                id="lodgementDate"
+                name="lodgementDate"
                 type="date"
+                title="Lodgement Date"
+                placeholder="dd/mm/yyyy"
                 className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                            focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
                            transition-colors duration-200 text-gray-900 text-sm sm:text-base
@@ -424,14 +443,21 @@ const ConsentCalculator: React.FC = () => {
 
             {/* Decision Date */}
             <div className="space-y-3">
-              <h3 className="text-base font-semibold text-gray-700">
+              <label
+                htmlFor="decisionDate"
+                className="text-base font-semibold text-gray-700"
+              >
                 Decision Date
                 <span className="block text-xs font-normal text-gray-500 mt-1">
                   End of processing timeframe
                 </span>
-              </h3>
+              </label>
               <input
+                id="decisionDate"
+                name="decisionDate"
                 type="date"
+                title="Decision Date"
+                placeholder="dd/mm/yyyy"
                 className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                            focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
                            transition-colors duration-200 text-gray-900 text-sm sm:text-base
@@ -460,6 +486,7 @@ const ConsentCalculator: React.FC = () => {
               className="bg-white hover:bg-[#3c5c17] hover:text-white border-[#3c5c17]
                          text-[#3c5c17] transition-colors duration-200 flex items-center
                          gap-2 px-3 py-2 text-sm sm:text-base whitespace-nowrap self-end sm:self-auto"
+              type="button"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Time Period</span>
@@ -481,6 +508,7 @@ const ConsentCalculator: React.FC = () => {
                     onClick={() => removeHoldPeriod(period.id)}
                     className="text-red-500 hover:text-red-700 hover:bg-red-50 
                                h-8 w-8 p-0"
+                    type="button"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -581,6 +609,7 @@ const ConsentCalculator: React.FC = () => {
                          text-[#3c5c17] transition-colors duration-200 flex items-center
                          gap-2 px-3 py-2 text-sm sm:text-base whitespace-nowrap
                          self-end sm:self-auto"
+              type="button"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Extension</span>
@@ -602,6 +631,7 @@ const ConsentCalculator: React.FC = () => {
                     onClick={() => removeExtension(extension.id)}
                     className="text-red-500 hover:text-red-700 hover:bg-red-50
                                h-8 w-8 p-0"
+                    type="button"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -657,6 +687,7 @@ const ConsentCalculator: React.FC = () => {
             validationError ? 'bg-opacity-90' : ''
           }`}
           onClick={calculateResult}
+          type="button"
         >
           <Calculator className="w-4 h-4" />
           <span>Calculate</span>
@@ -682,6 +713,7 @@ const ConsentCalculator: React.FC = () => {
                           <button
                             onClick={() => setActiveTooltip('working-days')}
                             className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                            type="button"
                           >
                             <Info className="h-4 w-4" />
                           </button>
@@ -728,6 +760,7 @@ const ConsentCalculator: React.FC = () => {
                             <button
                               onClick={() => setActiveTooltip('discount-regulations')}
                               className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                              type="button"
                             >
                               <Info className="h-4 w-4" />
                             </button>
@@ -807,6 +840,7 @@ const ConsentCalculator: React.FC = () => {
                 variant="ghost"
                 className="w-full flex items-center justify-between bg-white hover:bg-gray-50"
                 onClick={() => setShowAudit(!showAudit)}
+                type="button"
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium">Detailed Calculations</span>
@@ -818,6 +852,7 @@ const ConsentCalculator: React.FC = () => {
                           setActiveTooltip('detailed-calc');
                         }}
                         className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                        type="button"
                       >
                         <Info className="h-4 w-4" />
                       </button>
@@ -856,6 +891,7 @@ const ConsentCalculator: React.FC = () => {
                           <button
                             onClick={() => setActiveTooltip('elapsed-time')}
                             className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                            type="button"
                           >
                             <Info className="h-4 w-4" />
                           </button>
@@ -911,6 +947,7 @@ const ConsentCalculator: React.FC = () => {
                               <button
                                 onClick={() => setActiveTooltip('excluded-time')}
                                 className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                                type="button"
                               >
                                 <Info className="h-4 w-4" />
                               </button>
@@ -993,6 +1030,7 @@ const ConsentCalculator: React.FC = () => {
                             <button
                               onClick={() => setActiveTooltip('extension-time')}
                               className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                              type="button"
                             >
                               <Info className="h-4 w-4" />
                             </button>
@@ -1047,6 +1085,7 @@ const ConsentCalculator: React.FC = () => {
                           <button
                             onClick={() => setActiveTooltip('final-statutory')}
                             className="p-1 -m-1 text-gray-400 hover:text-gray-600 relative z-20"
+                            type="button"
                           >
                             <Info className="h-4 w-4" />
                           </button>
