@@ -93,16 +93,22 @@ interface WorkingDaysResult {
   holidays: number;
 }
 
+interface CalendarStats {
+  totalCalendarDays: number;
+  weekendDays: number;
+  holidayDays: number;
+}
+
 interface CalculationResult {
-  totalDays: number;
+  totalDays: number;         // statutory total working days (excl. day 0 if weekend/holiday)
   holdDays: number;
   extensionDays: number;
   finalDays: number;
   maxDays: number;
   isOvertime: boolean;
   details: {
-    weekends: number;
-    holidays: number;
+    weekends: number;       // statutory weekends (excluded)
+    holidays: number;       // statutory holidays (excluded)
     holdPeriodDetails: Array<{
       type: string;
       days: number;
@@ -110,6 +116,7 @@ interface CalculationResult {
       end: string;
     }>;
   };
+  calendarStats?: CalendarStats; // purely for display (starting from Day 1)
 }
 
 // For intervals
@@ -163,6 +170,9 @@ const ConsentCalculator: React.FC = () => {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [applicationType, setApplicationType] = useState<keyof typeof CONSENT_TYPES>('standard');
 
+  // store a note if original Day 0 is on a weekend/holiday
+  const [nonWorkingDayNote, setNonWorkingDayNote] = useState<string>("");
+
   // Track which tooltip is currently open (for mobile).
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
@@ -201,7 +211,30 @@ const ConsentCalculator: React.FC = () => {
     );
   };
 
-  // -- CHANGE #1: Skip “day 0” (lodgement date) in the working-day loop
+  const isInChristmasShutdown = (date: Date): boolean => {
+    const month = date.getMonth(); // 0-based, so 11 = December
+    const day = date.getDate();
+    return (month === 11 && day >= 20) || (month === 0 && day <= 10);
+  };
+
+  const isPeriodEntirelyNonWorking = (start: Date, end: Date): boolean => {
+    // First check if start and end are the same day and it's non-working
+    if (isEqual(start, end) && !isWorkingDay(start)) {
+      return true;
+    }
+
+    // Then check every day in the period
+    let current = new Date(start);
+    while (current <= end) {
+      if (isWorkingDay(current)) {
+        return false;
+      }
+      current = addDays(current, 1);
+    }
+    return true;
+  };
+
+  // STATUTORY calculation - skip lodgement day if weekend/holiday
   const calculateWorkingDays = (start: Date, end: Date): WorkingDaysResult => {
     let workingDays = 0;
     let weekends = 0;
@@ -228,6 +261,50 @@ const ConsentCalculator: React.FC = () => {
     return { workingDays, weekends, holidays };
   };
 
+  /**
+   * CALENDAR DAYS should skip "Day 0" (lodgement day) for display.
+   * Also handle the edge case where end < start → return 0 to avoid a “1 day” bug.
+   */
+  const calculateCalendarStatsForDisplay = (start: Date, end: Date): CalendarStats => {
+    // If the entire period falls within non-working days, return 0
+    if (isPeriodEntirelyNonWorking(start, end)) {
+      return {
+        totalCalendarDays: 0,
+        weekendDays: 0,
+        holidayDays: 0
+      };
+    }
+
+    // If end is actually before (or equal to) start, return 0
+    if (end < start) {
+      return {
+        totalCalendarDays: 0,
+        weekendDays: 0,
+        holidayDays: 0,
+      };
+    }
+
+    const totalCalendarDays = differenceInDays(end, start) + 1;
+    let weekendDays = 0;
+    let holidayDays = 0;
+    let current = new Date(start);
+
+    while (current <= end) {
+      if (isWeekend(current)) {
+        weekendDays++;
+      } else if (!isWorkingDay(current)) {
+        holidayDays++;
+      }
+      current = addDays(current, 1);
+    }
+
+    return {
+      totalCalendarDays,
+      weekendDays,
+      holidayDays,
+    };
+  };
+
   const mergeIntervals = (intervals: DateInterval[]): DateInterval[] => {
     if (!intervals.length) return [];
     intervals.sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -237,6 +314,7 @@ const ConsentCalculator: React.FC = () => {
 
     for (let i = 1; i < intervals.length; i++) {
       const next = intervals[i];
+      // “+1” is optional if we want to consider consecutive days as one range
       if (next.start.getTime() <= current.end.getTime() + 1) {
         current.end = new Date(Math.max(current.end.getTime(), next.end.getTime()));
       } else {
@@ -293,6 +371,7 @@ const ConsentCalculator: React.FC = () => {
 
   const calculateResult = () => {
     setValidationError(null);
+    setNonWorkingDayNote(""); // reset note each time
 
     if (!startDate && !endDate) {
       setValidationError("Please enter both lodgement date and decision date");
@@ -305,16 +384,91 @@ const ConsentCalculator: React.FC = () => {
       return;
     }
 
-    const mainStart = new Date(startDate);
+    const originalStart = new Date(startDate);
     const mainEnd = new Date(endDate);
 
-    if (mainEnd < mainStart) {
+    if (mainEnd < originalStart) {
       setValidationError("Decision date must be after lodgement date");
       return;
     }
 
-    // Calculate total working days from lodgement (excluding day 0) to decision
-    const { workingDays: totalDays, weekends, holidays } = calculateWorkingDays(mainStart, mainEnd);
+    // STEP 1: Always prepare the note if originalStart is non-working
+    let potentialNote = "";
+    if (!isWorkingDay(originalStart)) {
+      const originalStr = format(originalStart, "eeee, d MMM yyyy");
+      potentialNote = `Note: You have input that the application was lodged on ${originalStr}. `;
+    }
+
+    // STEP 2: If the entire period is non-working, short-circuit but still set the note if relevant
+    if (isPeriodEntirelyNonWorking(originalStart, mainEnd)) {
+      // Show the user the "both lodged and decided within non-working period" note
+      if (!isWorkingDay(originalStart)) {
+        setNonWorkingDayNote(
+          "Note: This application was both lodged and decided within a non-working period. While this is possible, no processing days will be counted."
+        );
+      }
+      // Return the 0-day result
+      const baseDays = CONSENT_TYPES[applicationType].baseDays;
+      setResult({
+        totalDays: 0,
+        holdDays: 0,
+        extensionDays: 0,
+        finalDays: 0,
+        maxDays: baseDays,
+        isOvertime: false,
+        details: {
+          weekends: 0,
+          holidays: 0,
+          holdPeriodDetails: [],
+        },
+        calendarStats: {
+          totalCalendarDays: 0,
+          weekendDays: 0,
+          holidayDays: 0,
+        },
+      });
+      return;
+    }
+
+    // STEP 3: If not entirely non-working, proceed as normal.
+    // Now figure out the adjusted start day (the first working day after a weekend/holiday).
+    let adjustedStart = new Date(originalStart);
+    while (!isWorkingDay(adjustedStart)) {
+      adjustedStart = addDays(adjustedStart, 1);
+    }
+
+    // If the original day was non-working, expand the note with the adjusted day 0 context
+    if (!isWorkingDay(originalStart)) {
+      const adjustedStr = format(adjustedStart, "eeee, d MMM yyyy");
+      if (isInChristmasShutdown(originalStart)) {
+        potentialNote += `As this falls within the non-working period between 20 December and 10 January (inclusive), the statutory 'Day 0' will be ${adjustedStr}. `;
+      } else if (isWeekend(originalStart)) {
+        potentialNote += `As this falls on a weekend, the statutory 'Day 0' will be ${adjustedStr}. `;
+      } else {
+        potentialNote += `As this is a public holiday, the statutory 'Day 0' will be ${adjustedStr}. `;
+      }
+      potentialNote += "This affects both statutory working days and calendar day calculations.";
+
+      setNonWorkingDayNote(potentialNote);
+    }
+
+    // STEP 4: Calculate statutory working days
+    const { workingDays: totalDays, weekends, holidays } = calculateWorkingDays(adjustedStart, mainEnd);
+
+    // STEP 5: Calculate calendar stats (Day 1 = adjustedStart + 1 day).
+    const calendarStart = addDays(adjustedStart, 1);
+
+    // If mainEnd < calendarStart, then totalCalendarDays = 0 (edge case fix).
+    let calendarStats: CalendarStats;
+    if (mainEnd < calendarStart) {
+      calendarStats = {
+        totalCalendarDays: 0,
+        weekendDays: 0,
+        holidayDays: 0,
+      };
+    } else {
+      calendarStats = calculateCalendarStatsForDisplay(calendarStart, mainEnd);
+    }
 
     // Gather hold intervals
     const holdIntervals = holdPeriods
@@ -330,7 +484,7 @@ const ConsentCalculator: React.FC = () => {
         ({ interval }) => !isNaN(interval.start.getTime()) && !isNaN(interval.end.getTime())
       )
       .map((obj) => {
-        const clamped = clampIntervalToRange(obj.interval.start, obj.interval.end, mainStart, mainEnd);
+        const clamped = clampIntervalToRange(obj.interval.start, obj.interval.end, adjustedStart, mainEnd);
         return {
           type: obj.type,
           interval: clamped,
@@ -339,9 +493,6 @@ const ConsentCalculator: React.FC = () => {
       .filter((obj) => obj.interval !== null) as Array<{ type: string; interval: DateInterval }>;
 
     const holdPeriodDetails = holdIntervals.map((obj) => {
-      // If a hold interval also starts on the same day as lodgement, 
-      // you could skip day 0 here as well, but it’s optional 
-      // unless you specifically need that logic for hold periods.
       const { workingDays } = calculateWorkingDays(obj.interval.start, obj.interval.end);
       return {
         type: obj.type,
@@ -351,6 +502,7 @@ const ConsentCalculator: React.FC = () => {
       };
     });
 
+    // Merge overlapping intervals
     const merged = mergeIntervals(holdIntervals.map((h) => h.interval));
     let holdDays = 0;
     merged.forEach(({ start, end }) => {
@@ -363,6 +515,7 @@ const ConsentCalculator: React.FC = () => {
       return sum + (isNaN(parsed) ? 0 : parsed);
     }, 0);
 
+    // Final net results
     const baseDays = CONSENT_TYPES[applicationType].baseDays;
     const maxDays = baseDays + extensionDays;
     const finalDays = totalDays - holdDays;
@@ -379,29 +532,30 @@ const ConsentCalculator: React.FC = () => {
         holidays,
         holdPeriodDetails,
       },
+      calendarStats,
     });
   };
 
   return (
     <Card className="w-full max-w-2xl mx-auto shadow-lg border-0 min-w-[320px] overflow-hidden bg-white sm:rounded-lg">
       <CardHeader className="bg-gradient-to-r from-[#3c5c17] to-[#6ba32a] text-white pb-6">
-  <CardTitle className="text-2xl font-bold mb-2">RMA Timeframes Calculator</CardTitle>
-  <p className="text-sm opacity-90">
-    A tool for calculating processing timeframes for resource consent applications under the Resource Management Act 1991.
-  </p>
-  <p className="text-sm mt-2">
-    Part of the{' '}
-    <a 
-      href="https://www.colabplanning.co.nz/tools" 
-      className="text-white underline decoration-white/50 hover:decoration-white transition-all duration-200 font-medium"
-      target="_blank" 
-      rel="noopener noreferrer"
-    >
-      CoLab Planning Tools
-    </a>
-    {' '}suite.
-  </p>
-</CardHeader>
+        <CardTitle className="text-2xl font-bold mb-2">RMA Timeframes Calculator</CardTitle>
+        <p className="text-sm opacity-90">
+          A tool for calculating processing timeframes for resource consent applications under the Resource Management Act 1991.
+        </p>
+        <p className="text-sm mt-2">
+          Part of the{' '}
+          <a 
+            href="https://www.colabplanning.co.nz/tools" 
+            className="text-white underline decoration-white/50 hover:decoration-white transition-all duration-200 font-medium"
+            target="_blank" 
+            rel="noopener noreferrer"
+          >
+            CoLab Planning Tools
+          </a>
+          {' '}suite.
+        </p>
+      </CardHeader>
 
       <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Application Type Box */}
@@ -700,6 +854,16 @@ const ConsentCalculator: React.FC = () => {
           </Alert>
         )}
 
+        {/* Non-Working Day Note */}
+        {nonWorkingDayNote && (
+          <Alert variant="default" className="bg-blue-50 border-blue-200">
+            <AlertDescription className="flex items-center gap-2 text-sm">
+              <Info className="h-8 w-8 text-blue-500" />
+              <span className="text-blue-800">{nonWorkingDayNote}</span>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Calculate Button */}
         <Button
           className={`w-full flex items-center justify-center gap-2 text-sm sm:text-base py-3 ${
@@ -743,7 +907,6 @@ const ConsentCalculator: React.FC = () => {
                               <div className="font-normal text-left">
                                 Working days as defined in s2 of the RMA – excludes weekends, public
                                 holidays, and the period between 20 December and 10 January.
-                                They exclude the day of lodgement.
                               </div>
                             }
                             isOpen={activeTooltip === 'working-days'}
@@ -759,7 +922,7 @@ const ConsentCalculator: React.FC = () => {
                             <TooltipContent className="max-w-xs">
                               <p className="text-sm font-normal">
                                 Working days as defined in s2 of the RMA – excludes weekends, public
-                                holidays, and the period between 20 December and 10 January. They exclude the day of lodgement.
+                                holidays, and the period between 20 December and 10 January.
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -845,7 +1008,7 @@ const ConsentCalculator: React.FC = () => {
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Total Calendar Days</div>
                     <div className="text-2xl sm:text-3xl font-semibold text-gray-900">
-                      {differenceInDays(new Date(endDate), new Date(startDate))}
+                      {result.calendarStats?.totalCalendarDays ?? 0}
                     </div>
                   </div>
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
@@ -924,7 +1087,7 @@ const ConsentCalculator: React.FC = () => {
                             <Info className="h-4 w-4" />
                           </button>
                           <MobileTooltip
-                            content="Total time elapsed since lodgement, before considering excluded periods. Calendar days are counted from the day after lodgement."
+                            content="Total time elapsed since Day 1 (the day after Day 0), before considering excluded periods"
                             isOpen={activeTooltip === 'elapsed-time'}
                             onClose={() => setActiveTooltip(null)}
                           />
@@ -937,8 +1100,7 @@ const ConsentCalculator: React.FC = () => {
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>
-                                Total time elapsed since lodgement, before considering excluded periods. 
-                                Calendar days are counted from the day after lodgement.
+                                Total time elapsed since Day 1 (the day after Day 0), before considering excluded periods.
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -949,16 +1111,20 @@ const ConsentCalculator: React.FC = () => {
                       <p className="flex justify-between">
                         <span className="text-gray-600">Calendar Days:</span>
                         <span className="font-medium">
-                          {differenceInDays(new Date(endDate), new Date(startDate))}
+                          {result.calendarStats?.totalCalendarDays ?? 0}
                         </span>
                       </p>
                       <p className="flex justify-between">
                         <span className="text-gray-600">Weekend Days:</span>
-                        <span className="font-medium">-{result.details.weekends}</span>
+                        <span className="font-medium">
+                          -{result.calendarStats?.weekendDays ?? 0}
+                        </span>
                       </p>
                       <p className="flex justify-between">
                         <span className="text-gray-600">Holidays:</span>
-                        <span className="font-medium">-{result.details.holidays}</span>
+                        <span className="font-medium">
+                          -{result.calendarStats?.holidayDays ?? 0}
+                        </span>
                       </p>
                       <p className="flex justify-between text-gray-900 font-medium border-t border-gray-100 pt-2">
                         <span>Elapsed Working Days:</span>
@@ -1011,8 +1177,8 @@ const ConsentCalculator: React.FC = () => {
                         >
                           <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-1 sm:mt-0" />
                           <span>
-                            Date ranges shown here include all calendar days, but working day counts
-                            exclude weekends, public holidays, and the period between 20 December
+                            Date ranges shown here include all calendar days, but working day count
+                            excludes weekends, public holidays, and the period between 20 December
                             and 10 January.
                           </span>
                         </div>
