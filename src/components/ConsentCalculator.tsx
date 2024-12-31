@@ -217,13 +217,16 @@ const ConsentCalculator: React.FC = () => {
     return (month === 11 && day >= 20) || (month === 0 && day <= 10);
   };
 
+  /**
+   * Return true if every single day from `start` to `end` (inclusive) is non-working.
+   */
   const isPeriodEntirelyNonWorking = (start: Date, end: Date): boolean => {
     // First check if start and end are the same day and it's non-working
     if (isEqual(start, end) && !isWorkingDay(start)) {
       return true;
     }
 
-    // Then check every day in the period
+    // Then check each day
     let current = new Date(start);
     while (current <= end) {
       if (isWorkingDay(current)) {
@@ -264,18 +267,13 @@ const ConsentCalculator: React.FC = () => {
   /**
    * CALENDAR DAYS should skip "Day 0" (lodgement day) for display.
    * Also handle the edge case where end < start → return 0 to avoid a “1 day” bug.
+   * 
+   * Removed the isPeriodEntirelyNonWorking check from here so that we can still
+   * show weekend/holiday counts if Day 0 was a working day but the decision date
+   * fell on a weekend/holiday immediately after.
    */
   const calculateCalendarStatsForDisplay = (start: Date, end: Date): CalendarStats => {
-    // If the entire period falls within non-working days, return 0
-    if (isPeriodEntirelyNonWorking(start, end)) {
-      return {
-        totalCalendarDays: 0,
-        weekendDays: 0,
-        holidayDays: 0
-      };
-    }
-
-    // If end is actually before (or equal to) start, return 0
+    // If end is before start, return 0
     if (end < start) {
       return {
         totalCalendarDays: 0,
@@ -314,7 +312,6 @@ const ConsentCalculator: React.FC = () => {
 
     for (let i = 1; i < intervals.length; i++) {
       const next = intervals[i];
-      // “+1” is optional if we want to consider consecutive days as one range
       if (next.start.getTime() <= current.end.getTime() + 1) {
         current.end = new Date(Math.max(current.end.getTime(), next.end.getTime()));
       } else {
@@ -399,14 +396,13 @@ const ConsentCalculator: React.FC = () => {
       potentialNote = `Note: You have input that the application was lodged on ${originalStr}. `;
     }
 
-    // STEP 2: If the entire period is non-working, short-circuit but still set the note if relevant
-    if (isPeriodEntirelyNonWorking(originalStart, mainEnd)) {
-      // Show the user the "both lodged and decided within non-working period" note
-      if (!isWorkingDay(originalStart)) {
-        setNonWorkingDayNote(
-          "Note: This application was both lodged and decided within a non-working period. While this is possible, no processing days will be counted."
-        );
-      }
+    // STEP 2: Only short-circuit to zero days if Day 0 is non-working AND the entire period is non-working
+    if (!isWorkingDay(originalStart) && isPeriodEntirelyNonWorking(originalStart, mainEnd)) {
+      // Show the user the "both lodged and decided within a non-working period" note
+      setNonWorkingDayNote(
+        "Note: This application was both lodged and decided within a non-working period. While this is possible, no processing days will be counted."
+      );
+
       // Return the 0-day result
       const baseDays = CONSENT_TYPES[applicationType].baseDays;
       setResult({
@@ -458,9 +454,9 @@ const ConsentCalculator: React.FC = () => {
     // STEP 5: Calculate calendar stats (Day 1 = adjustedStart + 1 day).
     const calendarStart = addDays(adjustedStart, 1);
 
-    // If mainEnd < calendarStart, then totalCalendarDays = 0 (edge case fix).
     let calendarStats: CalendarStats;
     if (mainEnd < calendarStart) {
+      // If the decision date precedes 'Day 1', show zero
       calendarStats = {
         totalCalendarDays: 0,
         weekendDays: 0,
