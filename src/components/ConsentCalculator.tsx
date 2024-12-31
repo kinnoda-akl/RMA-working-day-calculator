@@ -269,7 +269,7 @@ const ConsentCalculator: React.FC = () => {
    * Also handle the edge case where end < start → return 0 to avoid a “1 day” bug.
    * 
    * Removed the isPeriodEntirelyNonWorking check from here so that we can still
-   * show weekend/holiday counts if Day 0 was a working day but the decision date
+   * show weekend/holiday counts if Day 0 was a working day but the decision issue date
    * fell on a weekend/holiday immediately after.
    */
   const calculateCalendarStatsForDisplay = (start: Date, end: Date): CalendarStats => {
@@ -371,13 +371,13 @@ const ConsentCalculator: React.FC = () => {
     setNonWorkingDayNote(""); // reset note each time
 
     if (!startDate && !endDate) {
-      setValidationError("Please enter both lodgement date and decision date");
+      setValidationError("Please enter both lodgement date and decision issue date");
       return;
     } else if (!startDate) {
       setValidationError("Please enter a lodgement date");
       return;
     } else if (!endDate) {
-      setValidationError("Please enter a decision date");
+      setValidationError("Please enter a decision issue date");
       return;
     }
 
@@ -385,7 +385,7 @@ const ConsentCalculator: React.FC = () => {
     const mainEnd = new Date(endDate);
 
     if (mainEnd < originalStart) {
-      setValidationError("Decision date must be after lodgement date");
+      setValidationError("Decision issue date must be after lodgement date");
       return;
     }
 
@@ -400,7 +400,7 @@ const ConsentCalculator: React.FC = () => {
     if (!isWorkingDay(originalStart) && isPeriodEntirelyNonWorking(originalStart, mainEnd)) {
       // Show the user the "both lodged and decided within a non-working period" note
       setNonWorkingDayNote(
-        "Note: This application was both lodged and decided within a non-working period. No processing days will be counted."
+        "Note: This application was lodged and its decision issued within a non-working day period. No processing days will be counted."
       );
 
       // Return the 0-day result
@@ -456,7 +456,7 @@ const ConsentCalculator: React.FC = () => {
 
     let calendarStats: CalendarStats;
     if (mainEnd < calendarStart) {
-      // If the decision date precedes 'Day 1', show zero
+      // If the decision issue date precedes 'Day 1', show zero
       calendarStats = {
         totalCalendarDays: 0,
         weekendDays: 0,
@@ -615,10 +615,10 @@ const ConsentCalculator: React.FC = () => {
               />
             </div>
 
-            {/* Decision Date */}
+            {/* Decision Issue Date */}
             <div className="space-y-3">
               <label htmlFor="decisionDate" className="text-base font-semibold text-gray-700">
-                Decision Date
+                Decision Issue Date
                 <span className="block text-xs font-normal text-gray-600 mt-1">
                   End of processing timeframe
                 </span>
@@ -627,7 +627,7 @@ const ConsentCalculator: React.FC = () => {
                 id="decisionDate"
                 name="decisionDate"
                 type="date"
-                title="Decision Date"
+                title="Decision Issue Date"
                 placeholder="dd/mm/yyyy"
                 className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
                            focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
@@ -1083,7 +1083,7 @@ const ConsentCalculator: React.FC = () => {
                             <Info className="h-4 w-4" />
                           </button>
                           <MobileTooltip
-                            content="Total time elapsed since Day 1 (the day after Day 0), before considering excluded periods"
+                            content="Total elapsed time from Day 1 (the day after Day 0), before considering excluded periods"
                             isOpen={activeTooltip === 'elapsed-time'}
                             onClose={() => setActiveTooltip(null)}
                           />
@@ -1096,7 +1096,7 @@ const ConsentCalculator: React.FC = () => {
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>
-                                Total time elapsed since Day 1 (the day after Day 0), before considering excluded periods.
+                                Total elapsed time from since Day 1 (the day after Day 0), before considering excluded periods.
                               </p>
                             </TooltipContent>
                           </Tooltip>
