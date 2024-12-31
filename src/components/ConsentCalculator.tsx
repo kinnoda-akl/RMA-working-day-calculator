@@ -400,7 +400,7 @@ const ConsentCalculator: React.FC = () => {
     if (!isWorkingDay(originalStart) && isPeriodEntirelyNonWorking(originalStart, mainEnd)) {
       // Show the user the "both lodged and decided within a non-working period" note
       setNonWorkingDayNote(
-        "Note: This application was both lodged and decided within a non-working period. While this is possible, no processing days will be counted."
+        "Note: This application was both lodged and decided within a non-working period. No processing days will be counted."
       );
 
       // Return the 0-day result
@@ -443,7 +443,7 @@ const ConsentCalculator: React.FC = () => {
       } else {
         potentialNote += `As this is a public holiday, the statutory 'Day 0' will be ${adjustedStr}. `;
       }
-      potentialNote += "This affects both statutory working days and calendar day calculations.";
+      potentialNote += "All timeframe calculations (both statutory working days and calendar days) will begin from this adjusted Day 0.";
 
       setNonWorkingDayNote(potentialNote);
     }
