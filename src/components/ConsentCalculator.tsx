@@ -73,7 +73,6 @@ const MobileTooltip: React.FC<MobileTooltipProps> = ({ content, isOpen, onClose,
   );
 };
 
-// Types for state
 interface HoldPeriod {
   id: string;
   type: string;
@@ -81,7 +80,6 @@ interface HoldPeriod {
   end: string;
 }
 
-// Store days as a string so the user can backspace any initial "0".
 interface Extension {
   id: string;
   days: string;
@@ -101,7 +99,7 @@ interface CalendarStats {
 
 interface CalculationResult {
   totalDays: number;         // statutory total working days (excl. day 0 if weekend/holiday)
-  holdDays: number;
+  holdDays: number;         // final (clamped) hold days in working days
   extensionDays: number;
   finalDays: number;
   maxDays: number;
@@ -116,10 +114,13 @@ interface CalculationResult {
       end: string;
     }>;
   };
-  calendarStats?: CalendarStats; // purely for display (starting from Day 1)
+  calendarStats?: CalendarStats; 
+  rawHoldDays?: number;
+  wasExcludedDaysClamped?: boolean;
+  // ADD: We'll store the final clamped excluded day summary for the UI to display
+  excludedDaysSummary?: number;
 }
 
-// For intervals
 interface DateInterval {
   start: Date;
   end: Date;
@@ -173,8 +174,11 @@ const ConsentCalculator: React.FC = () => {
   // store a note if original Day 0 is on a weekend/holiday
   const [nonWorkingDayNote, setNonWorkingDayNote] = useState<string>("");
 
-  // Track which tooltip is currently open (for mobile).
+  // For tooltips on mobile
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
+  // NEW: For showing the “Important Notes” dropdown
+  const [showImportantNotes, setShowImportantNotes] = useState<boolean>(false);
 
   useEffect(() => {
     const loadNonWorkingDays = async () => {
@@ -212,7 +216,7 @@ const ConsentCalculator: React.FC = () => {
   };
 
   const isInChristmasShutdown = (date: Date): boolean => {
-    const month = date.getMonth(); // 0-based, so 11 = December
+    const month = date.getMonth(); // 0-based
     const day = date.getDate();
     return (month === 11 && day >= 20) || (month === 0 && day <= 10);
   };
@@ -221,12 +225,10 @@ const ConsentCalculator: React.FC = () => {
    * Return true if every single day from `start` to `end` (inclusive) is non-working.
    */
   const isPeriodEntirelyNonWorking = (start: Date, end: Date): boolean => {
-    // First check if start and end are the same day and it's non-working
     if (isEqual(start, end) && !isWorkingDay(start)) {
       return true;
     }
 
-    // Then check each day
     let current = new Date(start);
     while (current <= end) {
       if (isWorkingDay(current)) {
@@ -237,16 +239,20 @@ const ConsentCalculator: React.FC = () => {
     return true;
   };
 
-  // STATUTORY calculation - skip lodgement day if weekend/holiday
-  const calculateWorkingDays = (start: Date, end: Date): WorkingDaysResult => {
+  // We keep the existing logic for working days but be mindful of skipping day 0 if needed.
+  const calculateWorkingDays = (
+    start: Date,
+    end: Date,
+    skipStartDay: boolean = false
+  ): WorkingDaysResult => {
     let workingDays = 0;
     let weekends = 0;
     let holidays = 0;
+
     let current = new Date(start);
 
     while (current <= end) {
-      // If we are on the lodgement date itself, skip counting it:
-      if (isEqual(current, start)) {
+      if (skipStartDay && isEqual(current, start)) {
         current = addDays(current, 1);
         continue;
       }
@@ -265,15 +271,9 @@ const ConsentCalculator: React.FC = () => {
   };
 
   /**
-   * CALENDAR DAYS should skip "Day 0" (lodgement day) for display.
-   * Also handle the edge case where end < start → return 0 to avoid a “1 day” bug.
-   * 
-   * Removed the isPeriodEntirelyNonWorking check from here so that we can still
-   * show weekend/holiday counts if Day 0 was a working day but the decision issue date
-   * fell on a weekend/holiday immediately after.
+   * CALENDAR DAYS for display skip "Day 0" and handle end < start gracefully.
    */
   const calculateCalendarStatsForDisplay = (start: Date, end: Date): CalendarStats => {
-    // If end is before start, return 0
     if (end < start) {
       return {
         totalCalendarDays: 0,
@@ -368,7 +368,7 @@ const ConsentCalculator: React.FC = () => {
 
   const calculateResult = () => {
     setValidationError(null);
-    setNonWorkingDayNote(""); // reset note each time
+    setNonWorkingDayNote("");
 
     if (!startDate && !endDate) {
       setValidationError("Please enter both lodgement date and decision issue date");
@@ -389,21 +389,40 @@ const ConsentCalculator: React.FC = () => {
       return;
     }
 
-    // STEP 1: Always prepare the note if originalStart is non-working
+    // Validate hold periods
+    for (const p of holdPeriods) {
+      if (p.start && p.end) {
+        const holdStartD = new Date(p.start);
+        const holdEndD = new Date(p.end);
+
+        if (holdStartD < originalStart) {
+          setValidationError(`Excluded period start date (${p.type}) is before the lodgement date.`);
+          return;
+        }
+        if (holdEndD > mainEnd) {
+          setValidationError(`Excluded period end date (${p.type}) is after the decision date.`);
+          return;
+        }
+        if (holdStartD > holdEndD) {
+          setValidationError(`Excluded period start date (${p.type}) cannot be after the end date.`);
+          return;
+        }
+      }
+    }
+
+    // Step 1: If originalStart is non-working, store note
     let potentialNote = "";
     if (!isWorkingDay(originalStart)) {
       const originalStr = format(originalStart, "eeee, d MMM yyyy");
       potentialNote = `Note: You have input that the application was lodged on ${originalStr}. `;
     }
 
-    // STEP 2: Only short-circuit to zero days if Day 0 is non-working AND the entire period is non-working
+    // Step 2: Check if entire period is non-working
     if (!isWorkingDay(originalStart) && isPeriodEntirelyNonWorking(originalStart, mainEnd)) {
-      // Show the user the "both lodged and decided within a non-working period" note
       setNonWorkingDayNote(
         "Note: This application was lodged and its decision issued within a non-working day period. No processing days will be counted."
       );
 
-      // Return the 0-day result
       const baseDays = CONSENT_TYPES[applicationType].baseDays;
       setResult({
         totalDays: 0,
@@ -422,22 +441,23 @@ const ConsentCalculator: React.FC = () => {
           weekendDays: 0,
           holidayDays: 0,
         },
+        rawHoldDays: 0,
+        wasExcludedDaysClamped: false,
+        excludedDaysSummary: 0,
       });
       return;
     }
 
-    // STEP 3: If not entirely non-working, proceed as normal.
-    // Now figure out the adjusted start day (the first working day after a weekend/holiday).
+    // Step 3: Adjust Day 0 to next working day if needed
     let adjustedStart = new Date(originalStart);
     while (!isWorkingDay(adjustedStart)) {
       adjustedStart = addDays(adjustedStart, 1);
     }
 
-    // If the original day was non-working, expand the note with the adjusted day 0 context
     if (!isWorkingDay(originalStart)) {
       const adjustedStr = format(adjustedStart, "eeee, d MMM yyyy");
       if (isInChristmasShutdown(originalStart)) {
-        potentialNote += `As this falls within the non-working period between 20 December and 10 January (inclusive), the statutory 'Day 0' will be ${adjustedStr}. `;
+        potentialNote += `As this falls within the non-working day period between 20 December and 10 January (inclusive), the statutory 'Day 0' will be ${adjustedStr}. `;
       } else if (isWeekend(originalStart)) {
         potentialNote += `As this falls on a weekend, the statutory 'Day 0' will be ${adjustedStr}. `;
       } else {
@@ -448,15 +468,17 @@ const ConsentCalculator: React.FC = () => {
       setNonWorkingDayNote(potentialNote);
     }
 
-    // STEP 4: Calculate statutory working days
-    const { workingDays: totalDays, weekends, holidays } = calculateWorkingDays(adjustedStart, mainEnd);
+    // Step 4: Calculate statutory working days
+    const { workingDays: totalDaysRaw, weekends, holidays } = calculateWorkingDays(
+      adjustedStart,
+      mainEnd,
+      true // skip start day
+    );
 
-    // STEP 5: Calculate calendar stats (Day 1 = adjustedStart + 1 day).
+    // Step 5: Calculate calendar stats from Day 1 onward
     const calendarStart = addDays(adjustedStart, 1);
-
     let calendarStats: CalendarStats;
     if (mainEnd < calendarStart) {
-      // If the decision issue date precedes 'Day 1', show zero
       calendarStats = {
         totalCalendarDays: 0,
         weekendDays: 0,
@@ -466,7 +488,7 @@ const ConsentCalculator: React.FC = () => {
       calendarStats = calculateCalendarStatsForDisplay(calendarStart, mainEnd);
     }
 
-    // Gather hold intervals
+    // Gather hold intervals (clamped)
     const holdIntervals = holdPeriods
       .filter((p) => p.start && p.end)
       .map((p) => ({
@@ -488,8 +510,9 @@ const ConsentCalculator: React.FC = () => {
       })
       .filter((obj) => obj.interval !== null) as Array<{ type: string; interval: DateInterval }>;
 
+    // For detailed breakdown
     const holdPeriodDetails = holdIntervals.map((obj) => {
-      const { workingDays } = calculateWorkingDays(obj.interval.start, obj.interval.end);
+      const { workingDays } = calculateWorkingDays(obj.interval.start, obj.interval.end, false);
       return {
         type: obj.type,
         days: workingDays,
@@ -498,38 +521,71 @@ const ConsentCalculator: React.FC = () => {
       };
     });
 
-    // Merge overlapping intervals
+    // Merge overlapping intervals to get total hold days (raw)
     const merged = mergeIntervals(holdIntervals.map((h) => h.interval));
-    let holdDays = 0;
+    let holdDaysRaw = 0;
     merged.forEach(({ start, end }) => {
-      const { workingDays } = calculateWorkingDays(start, end);
-      holdDays += workingDays;
+      const { workingDays } = calculateWorkingDays(start, end, false);
+      holdDaysRaw += workingDays;
     });
 
+    // Sum extension days
     const extensionDays = extensions.reduce((sum, ext) => {
       const parsed = parseInt(ext.days, 10);
       return sum + (isNaN(parsed) ? 0 : parsed);
     }, 0);
 
-    // Final net results
+    // Base timeframe
     const baseDays = CONSENT_TYPES[applicationType].baseDays;
     const maxDays = baseDays + extensionDays;
-    const finalDays = totalDays - holdDays;
 
-    setResult({
-      totalDays,
-      holdDays,
+    // 1) Clamp holdDays
+    let wasExcludedDaysClamped = false;
+    const holdDaysClamped = Math.min(holdDaysRaw, totalDaysRaw);
+    if (holdDaysClamped < holdDaysRaw) {
+      wasExcludedDaysClamped = true;
+    }
+
+    // 2) Net working days after hold
+    let finalDays = totalDaysRaw - holdDaysClamped;
+    if (finalDays < 0) {
+      finalDays = 0;
+      wasExcludedDaysClamped = true;
+    }
+
+    // 3) For summary “Days Excluded,” clamp again if needed
+    const rawExcludedDaysSummary = weekends + holidays + holdDaysRaw;
+    let excludedDaysSummary = rawExcludedDaysSummary;
+
+    // If totalCalendarDays is 0, we want to show 0 excluded
+    if (calendarStats.totalCalendarDays === 0) {
+      excludedDaysSummary = 0;
+    } else if (excludedDaysSummary > calendarStats.totalCalendarDays) {
+      excludedDaysSummary = calendarStats.totalCalendarDays;
+      wasExcludedDaysClamped = true;
+    }
+
+    // Construct final result
+    const isOvertime = finalDays > maxDays;
+    const finalCalc: CalculationResult = {
+      totalDays: totalDaysRaw,
+      holdDays: holdDaysClamped,
       extensionDays,
       finalDays,
       maxDays,
-      isOvertime: finalDays > maxDays,
+      isOvertime,
       details: {
         weekends,
         holidays,
         holdPeriodDetails,
       },
       calendarStats,
-    });
+      rawHoldDays: holdDaysRaw,
+      wasExcludedDaysClamped,
+      excludedDaysSummary,
+    };
+
+    setResult(finalCalc);
   };
 
   return (
@@ -537,7 +593,7 @@ const ConsentCalculator: React.FC = () => {
       <CardHeader className="bg-gradient-to-r from-[#3c5c17] to-[#6ba32a] text-white pb-6">
         <CardTitle className="text-2xl font-bold mb-2">RMA Timeframes Calculator</CardTitle>
         <p className="text-sm opacity-90">
-          A tool for calculating processing timeframes for resource consent applications under the Resource Management Act 1991.
+          A tool for calculating processing timeframes for resource consent applications under the Resource Management Act 1991 (RMA).
         </p>
         <p className="text-sm mt-2">
           Part of the{' '}
@@ -554,6 +610,7 @@ const ConsentCalculator: React.FC = () => {
       </CardHeader>
 
       <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+
         {/* Application Type Box */}
         <div className="bg-gray-50 p-4 sm:p-6 border border-gray-200 shadow-inner rounded-lg">
           <div className="space-y-1">
@@ -854,7 +911,7 @@ const ConsentCalculator: React.FC = () => {
         {nonWorkingDayNote && (
           <Alert variant="default" className="bg-blue-50 border-blue-200">
             <AlertDescription className="flex items-center gap-2 text-sm">
-              <Info className="h-8 w-8 text-blue-500" />
+              <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
               <span className="text-blue-800">{nonWorkingDayNote}</span>
             </AlertDescription>
           </Alert>
@@ -888,7 +945,7 @@ const ConsentCalculator: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
                   <div className="mb-2 sm:mb-0">
                     <div className="flex items-center gap-1 text-gray-700 font-medium">
-                      Working Days
+                      Final Working Day Count
                       {isTouchDevice ? (
                         <>
                           <button
@@ -939,7 +996,7 @@ const ConsentCalculator: React.FC = () => {
                     <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
                       <div className="flex items-start sm:items-center gap-2 mb-2 sm:mb-0">
                         <span className="text-red-800 font-medium">
-                          Over time limit by {result.finalDays - result.maxDays} working days
+                        Over time limit by {result.finalDays - result.maxDays} working {(result.finalDays - result.maxDays) === 1 ? 'day' : 'days'}
                         </span>
                         {isTouchDevice ? (
                           <>
@@ -1008,9 +1065,10 @@ const ConsentCalculator: React.FC = () => {
                     </div>
                   </div>
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <div className="text-sm text-gray-600">Days Excluded</div>
+                    <div className="text-sm text-gray-600">Total Working Days Excluded</div>
                     <div className="text-2xl sm:text-3xl font-semibold text-gray-900">
-                      {result.details.weekends + result.details.holidays + result.holdDays}
+                      {/* Use the new excludedDaysSummary property here */}
+                      {result.excludedDaysSummary ?? 0}
                     </div>
                   </div>
                 </div>
@@ -1083,7 +1141,7 @@ const ConsentCalculator: React.FC = () => {
                             <Info className="h-4 w-4" />
                           </button>
                           <MobileTooltip
-                            content="Total elapsed time from Day 1 (the day after Day 0), before considering excluded periods"
+                            content="Total elapsed time before considering excluded time periods"
                             isOpen={activeTooltip === 'elapsed-time'}
                             onClose={() => setActiveTooltip(null)}
                           />
@@ -1096,7 +1154,7 @@ const ConsentCalculator: React.FC = () => {
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>
-                                Total elapsed time from since Day 1 (the day after Day 0), before considering excluded periods.
+                                Total elapsed time before considering excluded time periods
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -1173,9 +1231,12 @@ const ConsentCalculator: React.FC = () => {
                         >
                           <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-1 sm:mt-0" />
                           <span>
-                            Date ranges shown here include all calendar days, but working day count
-                            excludes weekends, public holidays, and the period between 20 December
-                            and 10 January.
+                            Date ranges shown here include all calendar days for the exluded period, but working day is as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January.
+                            {result.wasExcludedDaysClamped && (
+                              <div className="mt-1 text-sm text-blue-800 font-normal">
+                                <b>Note:</b> The total working days excluded has been adjusted to match the available processing days.
+                              </div>
+                            )}
                           </span>
                         </div>
 
@@ -1285,7 +1346,7 @@ const ConsentCalculator: React.FC = () => {
                             <Info className="h-4 w-4" />
                           </button>
                           <MobileTooltip
-                            content="A complete look at how net processing time compares to the base timeframe and any extensions."
+                            content="A complete look at how net processing time compares to the base timeframe and any extensions"
                             isOpen={activeTooltip === 'final-statutory'}
                             onClose={() => setActiveTooltip(null)}
                           />
@@ -1298,7 +1359,7 @@ const ConsentCalculator: React.FC = () => {
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
                               <p>
-                                A complete look at how net processing time compares to the base timeframe and any extensions.
+                                A complete look at how net processing time compares to the base timeframe and any extensions
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -1306,7 +1367,6 @@ const ConsentCalculator: React.FC = () => {
                       )}
                     </div>
                     <div className="space-y-3 mt-4 text-sm">
-                      {/* Show total days minus hold days => net processing time */}
                       <p className="flex flex-col sm:flex-row justify-between gap-2">
                         <span className="text-gray-600">Total Elapsed Working Days:</span>
                         <span className="font-medium">{result.totalDays}</span>
@@ -1339,11 +1399,128 @@ const ConsentCalculator: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* NEW: Important Notes Dropdown */}
+<div>
+  <Button
+    variant="ghost"
+    className="w-full flex items-center justify-between bg-white hover:bg-gray-50"
+    onClick={() => setShowImportantNotes(!showImportantNotes)}
+    type="button"
+  >
+    <div className="flex items-center gap-2">
+      <span className="font-medium">Important Notes</span>
+    </div>
+    {showImportantNotes ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+  </Button>
+
+  {showImportantNotes && (
+    <div className="mt-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
+      {/* Header Section */}
+      <div className="bg-gray-50 p-4 border-b border-gray-200">
+        <h4 className="font-semibold text-gray-900">Understanding Time Calculations</h4>
+        <p className="text-sm text-gray-600 mt-1">
+          Key information about how processing days are counted under the RMA
+        </p>
+      </div>
+      
+      {/* Content Section */}
+      <div className="p-4 sm:p-6 space-y-4 text-sm leading-relaxed text-gray-800">
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+          <p className="font-medium text-blue-900">
+            The RMA establishes two distinct approaches to counting time periods:
+          </p>
+          <ul className="mt-2 space-y-2 text-blue-800">
+            <li>• For statutory timeframes, counting starts the day <span className="font-medium">after</span> key trigger dates, e.g. date of lodgement, close of submissions, end of hearing</li>
+            <li>• Excluded periods can start on <span className="font-medium">any</span> working day, including trigger dates</li>
+          </ul>
+          <p className="mt-3 text-blue-800 text-sm">
+            This calculator has been specifically designed to handle these distinct counting approaches to ensure accurate timeframe calculations in all scenarios.
+          </p>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-4">
+          <p className="font-medium text-amber-900">Practical Examples:</p>
+          
+          <div className="pl-4 border-l-2 border-amber-300">
+            <p className="text-amber-900">
+              <strong>Example 1: Processing Timeframe (s115)</strong><br />
+              "Notice of the decision must be given within 20 working days <span className="font-medium underline">after</span> the date the application was first lodged..."
+              <br />
+              <span className="text-amber-700 text-xs mt-1 block">
+                → If lodged Monday, Day 1 starts Tuesday (the day after)
+              </span>
+            </p>
           </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+
+          <div className="pl-4 border-l-2 border-amber-300">
+            <p className="text-amber-900">
+              <strong>Example 2: Excluded Period (s88C(2))</strong><br />
+              "The period that must be excluded... is the period <span className="font-medium underline">starting with</span> the date of..."
+              <br />
+              <span className="text-amber-700 text-xs mt-1 block">
+                → If started Monday, Monday is counted as Day 1 of the excluded period
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+          <div>
+            <p className="font-medium text-gray-900 mb-2">Working Days Definition (RMA s2)</p>
+            <div className="prose prose-sm text-gray-700">
+              <p className="mb-2"><strong>working day</strong> means a day of the week other than—</p>
+              <ul className="list-none pl-4 space-y-1">
+                <li>(a) a Saturday, a Sunday, Waitangi Day, Good Friday, Easter Monday, Anzac Day, the Sovereign's birthday, Te Rā Aro ki a Matariki/Matariki Observance Day, and Labour Day; and</li>
+                <li>(b) if Waitangi Day or Anzac Day falls on a Saturday or a Sunday, the following Monday; and</li>
+                <li>(c) a day in the period commencing on 20 December in any year and ending with 10 January in the following year.</li>
+              </ul>
+            </div>
+            <p className="text-gray-700 mt-3 text-xs italic">
+              Note: Regional anniversary days in New Zealand, while holidays for that region, remain working days under this definition.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <p className="font-medium text-gray-900 mb-2">Edge Cases</p>
+          <p className="text-gray-700">
+            Because excluded periods can start on trigger dates (like Day 0), but processing days start the day after, 
+            some edge cases can arise. For example, an application put on hold on date of lodgement and taken off hold 
+            on the date of decision issue will show a greater number of excluded days. The calculator has built-in logic to handle these edge cases to ensure that processing 
+            days never fall below zero while maintaining accurate excluded period records.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50/80 border border-yellow-200/50 rounded-lg p-4">
+        <p className="font-medium text-gray-900 mb-2">Disclaimer</p>
+        <div className="text-gray-700 space-y-2">
+          <p>
+            While every effort has been made to ensure accuracy, there may be some edge cases or errors that are not caught. 
+            The calculator includes public holiday data up until the end of the Christmas holiday period overlapping 2030/2031. 
+            Users should always verify calculations independently, particularly for complex cases or dates beyond 2030.
+          </p>
+          <p>
+            Please{' '}
+            <a 
+              href="mailto:contact@colabplanning.co.nz" 
+              className="text-gray-900 underline hover:text-gray-700"
+            >
+              contact us
+            </a>{' '}
+            if you encounter an error that you would like us to review.
+          </p>
+        </div>
+      </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+</CardContent>
+</Card>
+);
 };
 
 export default ConsentCalculator;
