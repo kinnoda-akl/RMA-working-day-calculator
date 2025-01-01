@@ -114,7 +114,7 @@ interface CalculationResult {
       end: string;
     }>;
   };
-  calendarStats?: CalendarStats; 
+  calendarStats?: CalendarStats;
   rawHoldDays?: number;
   wasExcludedDaysClamped?: boolean;
   // ADD: We'll store the final clamped excluded day summary for the UI to display
@@ -177,8 +177,11 @@ const ConsentCalculator: React.FC = () => {
   // For tooltips on mobile
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
-  // NEW: For showing the “Important Notes” dropdown
+  // For showing/hiding the “Important Notes”
   const [showImportantNotes, setShowImportantNotes] = useState<boolean>(false);
+
+  // NEW: For disclaimers in a separate accordion
+  const [showDisclaimer, setShowDisclaimer] = useState<boolean>(false);
 
   useEffect(() => {
     const loadNonWorkingDays = async () => {
@@ -239,7 +242,6 @@ const ConsentCalculator: React.FC = () => {
     return true;
   };
 
-  // We keep the existing logic for working days but be mindful of skipping day 0 if needed.
   const calculateWorkingDays = (
     start: Date,
     end: Date,
@@ -270,9 +272,6 @@ const ConsentCalculator: React.FC = () => {
     return { workingDays, weekends, holidays };
   };
 
-  /**
-   * CALENDAR DAYS for display skip "Day 0" and handle end < start gracefully.
-   */
   const calculateCalendarStatsForDisplay = (start: Date, end: Date): CalendarStats => {
     if (end < start) {
       return {
@@ -586,6 +585,179 @@ const ConsentCalculator: React.FC = () => {
     };
 
     setResult(finalCalc);
+
+    // Once the result is set, we want the “Important Notes” accordion to go back to its original position
+    setShowImportantNotes(false);
+  };
+
+  // NEW: Clears all states to the default
+  const handleClear = () => {
+    setStartDate('');
+    setEndDate('');
+    setHoldPeriods([]);
+    setExtensions([]);
+    setResult(null);
+    setNonWorkingDayNote('');
+    setValidationError(null);
+    setApplicationType('standard');
+    setShowAudit(false);
+  };
+
+  /**
+   * Renders the “Important Notes” accordion block.
+   * Used both above and below the results.
+   */
+  const renderImportantNotesAccordion = () => {
+    return (
+      <div className="mt-4">
+        <Button
+          variant="ghost"
+          className="w-full flex items-center justify-between bg-white hover:bg-gray-50"
+          onClick={() => setShowImportantNotes(!showImportantNotes)}
+          type="button"
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-medium">Important Notes</span>
+          </div>
+          {showImportantNotes ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </Button>
+
+        {showImportantNotes && (
+          <div className="mt-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
+            {/* Header Section */}
+            <div className="bg-gray-50 p-4 border-b border-gray-200">
+              <h4 className="font-semibold text-gray-900">Understanding RMA Timeframe Calculations</h4>
+              <p className="text-sm text-gray-600 mt-1">
+                Key information about how processing days are counted under the RMA
+              </p>
+            </div>
+
+            {/* Content Section */}
+            <div className="p-4 sm:p-6 space-y-4 text-sm leading-relaxed text-gray-800">
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+                <p className="font-medium text-blue-900">
+                  The RMA establishes two distinct approaches to counting time periods:
+                </p>
+                <ul className="mt-2 space-y-2 text-blue-800">
+                  <li>
+                    • For statutory timeframes, counting starts the day <span className="font-medium">after</span>{' '}
+                    key trigger dates, e.g. date of lodgement, close of submissions, end of hearing
+                  </li>
+                  <li>
+                    • Excluded periods can start on <span className="font-medium">any</span> working day, including trigger dates
+                  </li>
+                </ul>
+                <p className="mt-3 text-blue-800 text-sm">
+                  This calculator has been specifically designed to handle these distinct counting approaches to
+                  ensure accurate timeframe calculations in all scenarios.
+                </p>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-4">
+                <p className="font-medium text-amber-900">Practical Examples:</p>
+
+                <div className="pl-4 border-l-2 border-amber-300">
+                  <p className="text-amber-900">
+                    <strong>Example 1: Processing Timeframe (s115)</strong>
+                    <br />
+                    "Notice of the decision must be given within 20 working days <span className="font-medium underline">after</span> the date the application was first lodged..."
+                    <br />
+                    <span className="text-amber-700 text-xs mt-1 block">
+                      → If lodged Monday, Day 1 starts Tuesday (the day after)
+                    </span>
+                  </p>
+                </div>
+
+                <div className="pl-4 border-l-2 border-amber-300">
+                  <p className="text-amber-900">
+                    <strong>Example 2: Excluded Period (s88C(2))</strong>
+                    <br />
+                    "The period that must be excluded... is the period <span className="font-medium underline">starting with</span> the date of..."
+                    <br />
+                    <span className="text-amber-700 text-xs mt-1 block">
+                      → If started Monday, Monday is counted as Day 1 of the excluded period
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                <div>
+                  <p className="font-medium text-gray-900 mb-2">Working Days Definition (RMA s2)</p>
+                  <div className="prose prose-sm text-gray-700">
+                    <p className="mb-2">
+                      <strong>working day</strong> means a day of the week other than—
+                    </p>
+                    <ul className="list-none pl-4 space-y-1">
+                      <li>(a) a Saturday, a Sunday, Waitangi Day, Good Friday, Easter Monday, Anzac Day, the Sovereign's birthday, Te Rā Aro ki a Matariki/Matariki Observance Day, and Labour Day; and</li>
+                      <li>(b) if Waitangi Day or Anzac Day falls on a Saturday or a Sunday, the following Monday; and</li>
+                      <li>(c) a day in the period commencing on 20 December in any year and ending with 10 January in the following year.</li>
+                    </ul>
+                  </div>
+                  <p className="text-gray-700 mt-3 text-xs italic">
+                    Note: Regional anniversary days in New Zealand, while holidays for that region, remain working days under this definition.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="font-medium text-gray-900 mb-2">Edge Cases</p>
+                <p className="text-gray-700">
+                  Because excluded periods can start on trigger dates (like Day 0), but processing days start the day after,
+                  some edge cases can arise. For example, an application put on hold on date of lodgement and taken off hold
+                  on the date of decision issue will show a greater number of excluded days. The calculator has built-in logic
+                  to handle these edge cases to ensure that processing days never fall below zero while maintaining accurate
+                  excluded period records.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /**
+   * Renders the new “Disclaimer” accordion block.
+   */
+  const renderDisclaimerAccordion = () => {
+    return (
+      <div className="mt-4">
+        <Button
+          variant="ghost"
+          className="w-full flex items-center justify-between bg-white hover:bg-gray-50"
+          onClick={() => setShowDisclaimer(!showDisclaimer)}
+          type="button"
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-medium">Disclaimer</span>
+          </div>
+          {showDisclaimer ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </Button>
+
+        {showDisclaimer && (
+          <div className="bg-gray-50 p-4 rounded-lg mt-2 border border-gray-200">
+            <div className="text-gray-700 space-y-2">
+              <p>
+                While every effort has been made to ensure accuracy with this calculator, there may be some edge cases or errors that are not caught as part of its design.
+                The calculator includes public holiday data up until the end of the Christmas holiday period overlapping 2030/2031.
+                Users should always verify calculations independently, particularly for complex cases or dates beyond 2030.
+              </p>
+              <p>
+                Please{' '}
+                <a
+                  href="mailto:contact@colabplanning.co.nz"
+                  className="text-gray-900 underline hover:text-gray-700"
+                >
+                  contact us
+                </a>{' '}
+                if you encounter an error that you would like us to review.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -597,10 +769,10 @@ const ConsentCalculator: React.FC = () => {
         </p>
         <p className="text-sm mt-2">
           Part of the{' '}
-          <a 
-            href="https://www.colabplanning.co.nz/tools" 
+          <a
+            href="https://www.colabplanning.co.nz/tools"
             className="text-white underline decoration-white/50 hover:decoration-white transition-all duration-200 font-medium"
-            target="_blank" 
+            target="_blank"
             rel="noopener noreferrer"
           >
             CoLab Planning Tools
@@ -610,7 +782,6 @@ const ConsentCalculator: React.FC = () => {
       </CardHeader>
 
       <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-
         {/* Application Type Box */}
         <div className="bg-gray-50 p-4 sm:p-6 border border-gray-200 shadow-inner rounded-lg">
           <div className="space-y-1">
@@ -917,17 +1088,37 @@ const ConsentCalculator: React.FC = () => {
           </Alert>
         )}
 
-        {/* Calculate Button */}
-        <Button
-          className={`w-full flex items-center justify-center gap-2 text-sm sm:text-base py-3 ${
-            validationError ? 'bg-opacity-90' : ''
-          }`}
-          onClick={calculateResult}
-          type="button"
-        >
-          <Calculator className="w-4 h-4" />
-          <span>Calculate</span>
-        </Button>
+        {/* Calculate + Clear Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Button
+            className={`w-full flex items-center justify-center gap-2 text-sm sm:text-base py-3 ${
+              validationError ? 'bg-opacity-90' : ''
+            }`}
+            onClick={calculateResult}
+            type="button"
+          >
+            <Calculator className="w-4 h-4" />
+            <span>Calculate</span>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleClear}
+            className="w-full flex items-center justify-center gap-2 text-sm sm:text-base py-3 
+                       text-[#3c5c17] border-[#3c5c17] hover:bg-[#3c5c17] hover:text-white"
+            type="button"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Clear</span>
+          </Button>
+        </div>
+
+        {/* Show Important Notes and Disclaimer before results when not calculated */}
+        {!result && (
+          <>
+            {renderImportantNotesAccordion()}
+            {renderDisclaimerAccordion()}
+          </>
+        )}
 
         {/* Results */}
         {result && (
@@ -996,7 +1187,8 @@ const ConsentCalculator: React.FC = () => {
                     <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
                       <div className="flex items-start sm:items-center gap-2 mb-2 sm:mb-0">
                         <span className="text-red-800 font-medium">
-                        Over time limit by {result.finalDays - result.maxDays} working {(result.finalDays - result.maxDays) === 1 ? 'day' : 'days'}
+                          Over time limit by {result.finalDays - result.maxDays} working{' '}
+                          {(result.finalDays - result.maxDays) === 1 ? 'day' : 'days'}
                         </span>
                         {isTouchDevice ? (
                           <>
@@ -1067,7 +1259,6 @@ const ConsentCalculator: React.FC = () => {
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Total Working Days Excluded</div>
                     <div className="text-2xl sm:text-3xl font-semibold text-gray-900">
-                      {/* Use the new excludedDaysSummary property here */}
                       {result.excludedDaysSummary ?? 0}
                     </div>
                   </div>
@@ -1400,127 +1591,16 @@ const ConsentCalculator: React.FC = () => {
               )}
             </div>
 
-            {/* NEW: Important Notes Dropdown */}
-<div>
-  <Button
-    variant="ghost"
-    className="w-full flex items-center justify-between bg-white hover:bg-gray-50"
-    onClick={() => setShowImportantNotes(!showImportantNotes)}
-    type="button"
-  >
-    <div className="flex items-center gap-2">
-      <span className="font-medium">Important Notes</span>
-    </div>
-    {showImportantNotes ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-  </Button>
+            {/* Re-show Important Notes AFTER result is calculated */}
+            {renderImportantNotesAccordion()}
 
-  {showImportantNotes && (
-    <div className="mt-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
-      {/* Header Section */}
-      <div className="bg-gray-50 p-4 border-b border-gray-200">
-        <h4 className="font-semibold text-gray-900">Understanding Time Calculations</h4>
-        <p className="text-sm text-gray-600 mt-1">
-          Key information about how processing days are counted under the RMA
-        </p>
-      </div>
-      
-      {/* Content Section */}
-      <div className="p-4 sm:p-6 space-y-4 text-sm leading-relaxed text-gray-800">
-        <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
-          <p className="font-medium text-blue-900">
-            The RMA establishes two distinct approaches to counting time periods:
-          </p>
-          <ul className="mt-2 space-y-2 text-blue-800">
-            <li>• For statutory timeframes, counting starts the day <span className="font-medium">after</span> key trigger dates, e.g. date of lodgement, close of submissions, end of hearing</li>
-            <li>• Excluded periods can start on <span className="font-medium">any</span> working day, including trigger dates</li>
-          </ul>
-          <p className="mt-3 text-blue-800 text-sm">
-            This calculator has been specifically designed to handle these distinct counting approaches to ensure accurate timeframe calculations in all scenarios.
-          </p>
-        </div>
-
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-4">
-          <p className="font-medium text-amber-900">Practical Examples:</p>
-          
-          <div className="pl-4 border-l-2 border-amber-300">
-            <p className="text-amber-900">
-              <strong>Example 1: Processing Timeframe (s115)</strong><br />
-              "Notice of the decision must be given within 20 working days <span className="font-medium underline">after</span> the date the application was first lodged..."
-              <br />
-              <span className="text-amber-700 text-xs mt-1 block">
-                → If lodged Monday, Day 1 starts Tuesday (the day after)
-              </span>
-            </p>
+            {/* NEW: Disclaimer in separate accordion */}
+            {renderDisclaimerAccordion()}
           </div>
-
-          <div className="pl-4 border-l-2 border-amber-300">
-            <p className="text-amber-900">
-              <strong>Example 2: Excluded Period (s88C(2))</strong><br />
-              "The period that must be excluded... is the period <span className="font-medium underline">starting with</span> the date of..."
-              <br />
-              <span className="text-amber-700 text-xs mt-1 block">
-                → If started Monday, Monday is counted as Day 1 of the excluded period
-              </span>
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-          <div>
-            <p className="font-medium text-gray-900 mb-2">Working Days Definition (RMA s2)</p>
-            <div className="prose prose-sm text-gray-700">
-              <p className="mb-2"><strong>working day</strong> means a day of the week other than—</p>
-              <ul className="list-none pl-4 space-y-1">
-                <li>(a) a Saturday, a Sunday, Waitangi Day, Good Friday, Easter Monday, Anzac Day, the Sovereign's birthday, Te Rā Aro ki a Matariki/Matariki Observance Day, and Labour Day; and</li>
-                <li>(b) if Waitangi Day or Anzac Day falls on a Saturday or a Sunday, the following Monday; and</li>
-                <li>(c) a day in the period commencing on 20 December in any year and ending with 10 January in the following year.</li>
-              </ul>
-            </div>
-            <p className="text-gray-700 mt-3 text-xs italic">
-              Note: Regional anniversary days in New Zealand, while holidays for that region, remain working days under this definition.
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <p className="font-medium text-gray-900 mb-2">Edge Cases</p>
-          <p className="text-gray-700">
-            Because excluded periods can start on trigger dates (like Day 0), but processing days start the day after, 
-            some edge cases can arise. For example, an application put on hold on date of lodgement and taken off hold 
-            on the date of decision issue will show a greater number of excluded days. The calculator has built-in logic to handle these edge cases to ensure that processing 
-            days never fall below zero while maintaining accurate excluded period records.
-          </p>
-        </div>
-
-        <div className="bg-yellow-50/80 border border-yellow-200/50 rounded-lg p-4">
-        <p className="font-medium text-gray-900 mb-2">Disclaimer</p>
-        <div className="text-gray-700 space-y-2">
-          <p>
-            While every effort has been made to ensure accuracy, there may be some edge cases or errors that are not caught. 
-            The calculator includes public holiday data up until the end of the Christmas holiday period overlapping 2030/2031. 
-            Users should always verify calculations independently, particularly for complex cases or dates beyond 2030.
-          </p>
-          <p>
-            Please{' '}
-            <a 
-              href="mailto:contact@colabplanning.co.nz" 
-              className="text-gray-900 underline hover:text-gray-700"
-            >
-              contact us
-            </a>{' '}
-            if you encounter an error that you would like us to review.
-          </p>
-        </div>
-      </div>
-          </div>
-        </div>
-      )}
-    </div>
-  </div>
-)}
-</CardContent>
-</Card>
-);
+        )}
+      </CardContent>
+    </Card>
+  );
 };
 
 export default ConsentCalculator;
