@@ -132,8 +132,8 @@ const HOLD_PERIOD_TYPES = {
   s91: 'Additional Consents s91',
   s91A: 'Suspension Notified Application s91A',
   s91D: 'Suspension Non-Notified Application s91D',
-  s92A: 'Request for Information s92(1)',
-  s92B: 'Request to Commission Report s92(2)',
+  ['s92(1)']: 'Request for Information s92(1)',
+  ['s92(2)']: 'Request to Commission Report s92(2)',
   other: 'Other',
 } as const;
 
@@ -342,7 +342,7 @@ const ConsentCalculator: React.FC = () => {
   const addHoldPeriod = () => {
     const newHoldPeriod: HoldPeriod = {
       id: crypto.randomUUID(),
-      type: 's92A',
+      type: 's92(1)',
       start: '',
       end: '',
     };
@@ -816,7 +816,7 @@ const ConsentCalculator: React.FC = () => {
         </div>
 
         {/* Date Inputs */}
-        <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
+        <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
             {/* Lodgement Date */}
             <div className="space-y-3">
