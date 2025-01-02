@@ -783,7 +783,7 @@ const ConsentCalculator: React.FC = () => {
 
       <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Application Type Box */}
-        <div className="bg-gray-50 p-4 sm:p-6 border border-gray-200 shadow-inner rounded-lg">
+        <div className="bg-white p-4 sm:p-6 border border-gray-200 shadow-inner rounded-lg">
           <div className="space-y-1">
             <label
               htmlFor="applicationType"
@@ -870,7 +870,7 @@ const ConsentCalculator: React.FC = () => {
         </div>
 
         {/* Excluded Time Periods */}
-        <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
+        <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4 sm:mb-6">
             <div className="space-y-1 max-w-[70%] sm:max-w-none">
               <h3 className="text-base font-semibold text-gray-700">Excluded Time Periods</h3>
@@ -990,7 +990,7 @@ const ConsentCalculator: React.FC = () => {
         </div>
 
         {/* Extensions (s37) */}
-        <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
+        <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4 sm:mb-6">
             <div className="space-y-1 max-w-[70%] sm:max-w-none">
               <h3 className="text-base font-semibold text-gray-700">Extension of Time (s37)</h3>
