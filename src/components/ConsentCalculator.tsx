@@ -783,7 +783,7 @@ const ConsentCalculator: React.FC = () => {
 
       <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Application Type Box */}
-        <div className="bg-white p-4 sm:p-6 border border-gray-200 shadow-inner rounded-lg">
+        <div className="bg-gray-50 p-4 sm:p-6 border border-gray-200 shadow-inner rounded-lg">
           <div className="space-y-1">
             <label
               htmlFor="applicationType"
@@ -800,10 +800,10 @@ const ConsentCalculator: React.FC = () => {
             id="applicationType"
             name="applicationType"
             title="Application Type"
-            className="w-full mt-3 p-2 sm:p-2.5 border border-gray-200 rounded-md shadow-sm
-                       text-sm sm:text-base focus:ring-2 focus:ring-[#3c5c17] 
-                       focus:border-[#3c5c17]
-                       -webkit-appearance: none appearance-none"
+            className="w-full mt-3 p-2 sm:p-2.5 border border-gray-200 rounded-md
+           text-sm sm:text-base focus:ring-2 focus:ring-[#3c5c17] 
+           focus:border-[#3c5c17] bg-white
+           -webkit-appearance: none appearance-none"
             value={applicationType}
             onChange={(e) => setApplicationType(e.target.value as keyof typeof CONSENT_TYPES)}
           >
@@ -816,7 +816,7 @@ const ConsentCalculator: React.FC = () => {
         </div>
 
         {/* Date Inputs */}
-        <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
+        <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
             {/* Lodgement Date */}
             <div className="space-y-3">
@@ -833,11 +833,12 @@ const ConsentCalculator: React.FC = () => {
                 type="date"
                 title="Lodgement Date"
                 placeholder="dd/mm/yyyy"
-                className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
-                           focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                           transition-colors duration-200 text-gray-900 text-sm sm:text-base
-                           -webkit-appearance: none appearance-none
-                           min-h-[42px] sm:min-h-[48px]"
+                className="w-full p-2 sm:p-3 border border-gray-200 rounded-md
+           focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
+           transition-colors duration-200 text-gray-900 text-sm sm:text-base
+           bg-white
+           -webkit-appearance: none appearance-none
+           min-h-[42px] sm:min-h-[48px]"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
@@ -857,11 +858,12 @@ const ConsentCalculator: React.FC = () => {
                 type="date"
                 title="Decision Issue Date"
                 placeholder="dd/mm/yyyy"
-                className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
-                           focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                           transition-colors duration-200 text-gray-900 text-sm sm:text-base
-                           -webkit-appearance: none appearance-none
-                           min-h-[42px] sm:min-h-[48px]"
+                className="w-full p-2 sm:p-3 border border-gray-200 rounded-md
+           focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
+           transition-colors duration-200 text-gray-900 text-sm sm:text-base
+           bg-white
+           -webkit-appearance: none appearance-none
+           min-h-[42px] sm:min-h-[48px]"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
@@ -870,7 +872,7 @@ const ConsentCalculator: React.FC = () => {
         </div>
 
         {/* Excluded Time Periods */}
-        <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
+        <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4 sm:mb-6">
             <div className="space-y-1 max-w-[70%] sm:max-w-none">
               <h3 className="text-base font-semibold text-gray-700">Excluded Time Periods</h3>
@@ -942,11 +944,12 @@ const ConsentCalculator: React.FC = () => {
                     </label>
                     <input
                       type="date"
-                      className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
-                                 focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                                 transition-colors duration-200 text-gray-900 text-sm sm:text-base
-                                 -webkit-appearance: none appearance-none
-                                 min-h-[42px] sm:min-h-[48px]"
+                      className="w-full p-2 sm:p-3 border border-gray-200 rounded-md
+           focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
+           transition-colors duration-200 text-gray-900 text-sm sm:text-base
+           bg-white
+           -webkit-appearance: none appearance-none
+           min-h-[42px] sm:min-h-[48px]"
                       value={period.start}
                       onChange={(e) => {
                         const newPeriods = holdPeriods.map((p) =>
@@ -960,11 +963,12 @@ const ConsentCalculator: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-600 mb-2">End Date</label>
                     <input
                       type="date"
-                      className="w-full p-2 sm:p-3 border border-gray-200 rounded-md shadow-sm
-                                 focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
-                                 transition-colors duration-200 text-gray-900 text-sm sm:text-base
-                                 -webkit-appearance: none appearance-none
-                                 min-h-[42px] sm:min-h-[48px]"
+                      className="w-full p-2 sm:p-3 border border-gray-200 rounded-md
+           focus:ring-2 focus:ring-[#3c5c17] focus:border-[#3c5c17]
+           transition-colors duration-200 text-gray-900 text-sm sm:text-base
+           bg-white
+           -webkit-appearance: none appearance-none
+           min-h-[42px] sm:min-h-[48px]"
                       value={period.end}
                       onChange={(e) => {
                         const newPeriods = holdPeriods.map((p) =>
@@ -990,7 +994,7 @@ const ConsentCalculator: React.FC = () => {
         </div>
 
         {/* Extensions (s37) */}
-        <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
+        <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-200 shadow-inner">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4 sm:mb-6">
             <div className="space-y-1 max-w-[70%] sm:max-w-none">
               <h3 className="text-base font-semibold text-gray-700">Extension of Time (s37)</h3>
