@@ -1426,7 +1426,7 @@ const ConsentCalculator: React.FC = () => {
                         >
                           <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-1 sm:mt-0" />
                           <span>
-                            Date ranges shown here include all calendar days for the exluded period, but working day is as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January.
+                            Date ranges shown here include all calendar days for the excluded period, but working day is as defined in s2 of the RMA – excludes weekends, public holidays, and the period between 20 December and 10 January.
                             {result.wasExcludedDaysClamped && (
                               <div className="mt-1 text-sm text-blue-800 font-normal">
                                 <b>Note:</b> The total working days excluded has been adjusted to match the available processing days.
