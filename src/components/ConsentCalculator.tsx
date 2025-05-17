@@ -100,6 +100,7 @@ interface CalendarStats {
 interface CalculationResult {
   totalDays: number;         // statutory total working days (excl. day 0 if weekend/holiday)
   holdDays: number;         // final (clamped) hold days in working days
+  elapsedWorkingDays: number; // working days before subtracting excluded periods
   extensionDays: number;
   finalDays: number;
   maxDays: number;
@@ -119,6 +120,8 @@ interface CalculationResult {
   wasExcludedDaysClamped?: boolean;
   // ADD: We'll store the final clamped excluded day summary for the UI to display
   excludedDaysSummary?: number;
+  // Number of days skipped when lodgement occurred on a non-working day
+  day0Adjustment?: number;
 }
 
 interface DateInterval {
@@ -417,15 +420,27 @@ const ConsentCalculator: React.FC = () => {
     }
 
     // Step 2: Check if entire period is non-working
-    if (!isWorkingDay(originalStart) && isPeriodEntirelyNonWorking(originalStart, mainEnd)) {
+    if (!isWorkingDay(originalStart) &&
+        isPeriodEntirelyNonWorking(originalStart, mainEnd)) {
       setNonWorkingDayNote(
         "Note: This application was lodged and its decision issued within a non-working day period. No processing days will be counted."
       );
 
       const baseDays = CONSENT_TYPES[applicationType].baseDays;
+      const calendarStart = addDays(originalStart, 1);
+      const calendarStats =
+        mainEnd < calendarStart
+          ? {
+              totalCalendarDays: 0,
+              weekendDays: 0,
+              holidayDays: 0,
+            }
+          : calculateCalendarStatsForDisplay(calendarStart, mainEnd);
+
       setResult({
         totalDays: 0,
         holdDays: 0,
+        elapsedWorkingDays: 0,
         extensionDays: 0,
         finalDays: 0,
         maxDays: baseDays,
@@ -435,14 +450,14 @@ const ConsentCalculator: React.FC = () => {
           holidays: 0,
           holdPeriodDetails: [],
         },
-        calendarStats: {
-          totalCalendarDays: 0,
-          weekendDays: 0,
-          holidayDays: 0,
-        },
+        calendarStats,
         rawHoldDays: 0,
         wasExcludedDaysClamped: false,
-        excludedDaysSummary: 0,
+        excludedDaysSummary:
+          calendarStats.totalCalendarDays > 0
+            ? calendarStats.weekendDays + calendarStats.holidayDays
+            : 0,
+        day0Adjustment: 0,
       });
       return;
     }
@@ -462,7 +477,8 @@ const ConsentCalculator: React.FC = () => {
       } else {
         potentialNote += `As this is a public holiday, the statutory 'Day 0' will be ${adjustedStr}. `;
       }
-      potentialNote += "All timeframe calculations (both statutory working days and calendar days) will begin from this adjusted Day 0.";
+      potentialNote +=
+        "Statutory working days will begin from this adjusted Day 0, while calendar days are counted from the day after lodgement.";
 
       setNonWorkingDayNote(potentialNote);
     }
@@ -475,7 +491,7 @@ const ConsentCalculator: React.FC = () => {
     );
 
     // Step 5: Calculate calendar stats from Day 1 onward
-    const calendarStart = addDays(adjustedStart, 1);
+    const calendarStart = addDays(originalStart, 1);
     let calendarStats: CalendarStats;
     if (mainEnd < calendarStart) {
       calendarStats = {
@@ -501,7 +517,12 @@ const ConsentCalculator: React.FC = () => {
         ({ interval }) => !isNaN(interval.start.getTime()) && !isNaN(interval.end.getTime())
       )
       .map((obj) => {
-        const clamped = clampIntervalToRange(obj.interval.start, obj.interval.end, adjustedStart, mainEnd);
+        const clamped = clampIntervalToRange(
+          obj.interval.start,
+          obj.interval.end,
+          adjustedStart,
+          mainEnd
+        );
         return {
           type: obj.type,
           interval: clamped,
@@ -564,11 +585,18 @@ const ConsentCalculator: React.FC = () => {
       wasExcludedDaysClamped = true;
     }
 
+    const calculatedDay0Adjustment =
+      calendarStats.totalCalendarDays -
+      (calendarStats.weekendDays + calendarStats.holidayDays) -
+      totalDaysRaw;
+    const day0Adjustment = Math.max(calculatedDay0Adjustment, 0);
+
     // Construct final result
     const isOvertime = finalDays > maxDays;
     const finalCalc: CalculationResult = {
       totalDays: totalDaysRaw,
       holdDays: holdDaysClamped,
+      elapsedWorkingDays: totalDaysRaw,
       extensionDays,
       finalDays,
       maxDays,
@@ -582,6 +610,7 @@ const ConsentCalculator: React.FC = () => {
       rawHoldDays: holdDaysRaw,
       wasExcludedDaysClamped,
       excludedDaysSummary,
+      day0Adjustment,
     };
 
     setResult(finalCalc);
@@ -1375,9 +1404,15 @@ const ConsentCalculator: React.FC = () => {
                           -{result.calendarStats?.holidayDays ?? 0}
                         </span>
                       </p>
+                      <p className="flex justify-between">
+                        <span className="text-gray-600">Day 0 Adjustment:</span>
+                        <span className="font-medium">
+                          -{result.day0Adjustment ?? 0}
+                        </span>
+                      </p>
                       <p className="flex justify-between text-gray-900 font-medium border-t border-gray-100 pt-2">
-                        <span>Elapsed Working Days:</span>
-                        <span>{result.totalDays}</span>
+                        <span>Working Days (Before Exclusions)</span>
+                        <span>{result.elapsedWorkingDays}</span>
                       </p>
                     </div>
                   </div>
@@ -1564,7 +1599,7 @@ const ConsentCalculator: React.FC = () => {
                     <div className="space-y-3 mt-4 text-sm">
                       <p className="flex flex-col sm:flex-row justify-between gap-2">
                         <span className="text-gray-600">Total Elapsed Working Days:</span>
-                        <span className="font-medium">{result.totalDays}</span>
+                        <span className="font-medium">{result.elapsedWorkingDays}</span>
                       </p>
                       <p className="flex flex-col sm:flex-row justify-between gap-2">
                         <span className="text-gray-600">Excluded Working Days (On Hold etc.):</span>
